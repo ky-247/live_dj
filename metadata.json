@@ -1,0 +1,6 @@
+{
+  "name": "DesiBeats - Crowd DJ & Live Queue",
+  "description": "Real-time crowdsourced DJ song request, YouTube Music auto-queue, stage equalizer player, and DJ moderation console for Indian events in Germany.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
