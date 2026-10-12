@@ -767,7 +767,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     app.use(express.static(join(__dirname, 'dist')));
-    app.use('*', (req, res, next) => {
+    app.use('/{*splat}', (req, res, next) => {
       if (req.originalUrl.startsWith('/api')) {
         return next();
       }
