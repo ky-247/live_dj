@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Sparkles, Disc3, Mic2, Heart } from 'lucide-react';
 import { QueueItem } from '../types';
+import { StageEqualizer } from './StageEqualizer';
 
 interface EqualizerProps {
   track: QueueItem | null;
@@ -133,64 +134,29 @@ export function EqualizerVisualizer({ track, isPlaying }: EqualizerProps) {
             {track.channel_title}
           </p>
 
-          {/* Dedication / Guest shoutout banner */}
-          <div className="pt-2">
-            <div className="inline-block bg-neutral-900/90 border border-neutral-800/90 rounded-2xl p-4 text-left max-w-xl backdrop-blur-md shadow-xl">
-              <div className="flex items-center gap-2 text-xs font-semibold text-neutral-400 mb-1">
-                <span>Requested by</span>
-                <span className="text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
-                  {track.requested_by || 'Guest'}
-                </span>
-              </div>
-              {track.dedication_note ? (
-                <p className="text-base sm:text-lg text-pink-200 font-medium italic">
-                  "{track.dedication_note}"
-                </p>
-              ) : (
-                <p className="text-xs text-neutral-500 italic">
-                  No shoutout note • Dancefloor banger
-                </p>
-              )}
+          {/* Guest requester & Upvote stats */}
+          <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-3">
+            <div className="inline-flex items-center gap-2 bg-neutral-900/90 border border-neutral-800/90 rounded-2xl px-4 py-2 backdrop-blur-md shadow-xl text-xs sm:text-sm">
+              <span className="text-neutral-400">Requested by</span>
+              <span className="text-amber-300 font-bold bg-amber-500/10 px-2.5 py-0.5 rounded-lg border border-amber-500/20">
+                {track.requested_by || 'Guest'}
+              </span>
+            </div>
+
+            <div className="inline-flex items-center gap-1.5 bg-orange-500/15 border border-orange-500/30 rounded-2xl px-3.5 py-2 text-xs sm:text-sm font-bold text-orange-300">
+              <span>🔥 {track.upvotes} Upvotes</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Bottom: Spectacular Multi-Bar Audio Equalizer */}
-      <div className="relative z-10 w-full max-w-5xl mx-auto pt-6">
-        <div className="bg-neutral-950/60 border border-neutral-800/80 backdrop-blur-md rounded-2xl p-4 sm:p-6 shadow-2xl">
-          <div className="flex items-center justify-between text-xs text-neutral-400 mb-3 px-1">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
-              <span className="font-mono uppercase font-bold text-neutral-300">Live Stage Spectrum</span>
-            </div>
-            <span className="font-mono text-neutral-500">20Hz - 20kHz • Bass Booster</span>
-          </div>
-
-          {/* Equalizer Frequency Bars */}
-          <div className="h-24 sm:h-32 flex items-end justify-between gap-1 sm:gap-1.5 px-1">
-            {barHeights.map((height, idx) => (
-              <div
-                key={idx}
-                className="flex-1 flex flex-col justify-end items-center h-full group"
-              >
-                {/* Peak bounce dot */}
-                <div
-                  className="w-full max-w-[10px] h-1 rounded-full bg-amber-300 transition-all duration-150 mb-1 shadow-[0_0_8px_rgba(251,191,36,0.6)]"
-                  style={{ opacity: height > 30 ? 0.9 : 0.3 }}
-                />
-                {/* Main animated bar */}
-                <div
-                  className="w-full max-w-[10px] rounded-t-sm transition-all duration-100 ease-out bg-gradient-to-t from-orange-600 via-pink-500 to-amber-300 shadow-[0_0_12px_rgba(249,115,22,0.4)]"
-                  style={{
-                    height: `${height}%`,
-                    minHeight: '6px'
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Bottom: Spectacular Multi-Mode Stage Equalizer (Bigger layout) */}
+      <div className="relative z-10 w-full max-w-6xl mx-auto pt-6 flex-1 flex flex-col justify-end">
+        <StageEqualizer
+          isPlaying={isPlaying}
+          heightClass="h-56 sm:h-72 md:h-84 lg:h-96"
+          showControls={true}
+        />
       </div>
     </div>
   );

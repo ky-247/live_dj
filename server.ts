@@ -25,7 +25,7 @@ interface QueueTrack {
   channel_title: string;
   thumbnail_url: string;
   requested_by: string;
-  dedication_note: string;
+  dedication_note?: string;
   upvotes: number;
   is_master_list: boolean;
   status: 'pending' | 'playing' | 'played';
@@ -50,6 +50,15 @@ interface PlayedHistoryEntry {
   youtube_id: string;
   title: string;
   played_at: number; // timestamp in ms
+}
+
+export interface PartyContributor {
+  client_id: string;
+  name: string;
+  totalUpvotes: number;
+  acceptedSongs: number;
+  topTrackTitle: string;
+  topTrackUpvotes: number;
 }
 
 // Curated library of party favorites for Indian events in Germany
@@ -137,7 +146,6 @@ const initialQueue: QueueTrack[] = [
     channel_title: 'YRF',
     thumbnail_url: 'https://i.ytimg.com/vi/YxWlaYCA8MU/hqdefault.jpg',
     requested_by: 'Host / Master Playlist',
-    dedication_note: 'Warmup dancefloor starter',
     upvotes: 4,
     is_master_list: true,
     status: 'pending'
@@ -150,7 +158,6 @@ const initialQueue: QueueTrack[] = [
     channel_title: 'Zee Music Company',
     thumbnail_url: 'https://i.ytimg.com/vi/kw4tT7SCmaY/hqdefault.jpg',
     requested_by: 'Host / Master Playlist',
-    dedication_note: 'Bride & Groom Entry Song',
     upvotes: 6,
     is_master_list: true,
     status: 'pending'
@@ -163,10 +170,10 @@ const initialQueue: QueueTrack[] = [
     channel_title: 'Saregama Music',
     thumbnail_url: 'https://i.ytimg.com/vi/RLzC55ai0eo/hqdefault.jpg',
     requested_by: 'Aman & Friends (Munich)',
-    dedication_note: 'For the Ladkewale squad on the floor! 🔥',
     upvotes: 9,
     is_master_list: false,
-    status: 'pending'
+    status: 'pending',
+    client_id: 'client_aman_demo'
   },
   {
     id: 'guest-req-2',
@@ -176,10 +183,10 @@ const initialQueue: QueueTrack[] = [
     channel_title: 'Panjabi MC Official',
     thumbnail_url: 'https://i.ytimg.com/vi/OqEC6h7nFfM/hqdefault.jpg',
     requested_by: 'Pooja from Frankfurt',
-    dedication_note: 'Bhangra blast for uncle & aunty! 🕺',
     upvotes: 5,
     is_master_list: false,
-    status: 'pending'
+    status: 'pending',
+    client_id: 'client_pooja_demo'
   }
 ];
 
@@ -190,11 +197,17 @@ let adminPin: string = '1234';
 // Anti-Spam Tracking Maps
 const clientLastRequestTime = new Map<string, number>();
 const clientUpvotesMap = new Map<string, Set<string>>(); // clientId -> set of track IDs
+// Guest names mapping for leaderboard
+const clientNamesMap = new Map<string, string>([
+  ['client_aman_demo', 'Aman & Friends (Munich)'],
+  ['client_pooja_demo', 'Pooja from Frankfurt']
+]);
 
 let globalState = {
   isLocked: false,
   nowPlayingTrackId: null as string | null,
   announcement: null as string | null,
+  mvpRevealActive: false, // DJ can activate or reset Top 3 Party MVPs ceremony
   settings: {
     guestCooldownSeconds: 180, // 3 minutes default
     duplicateLockoutMinutes: 30, // 30 minutes lockout
@@ -237,8 +250,54 @@ function getClientIdentifier(req: express.Request): string {
   return (req.ip || req.socket.remoteAddress || 'unknown-client').toString();
 }
 
+// Compute Party Leaderboard (Top contributors who got the most upvotes)
+function computeLeaderboard(): PartyContributor[] {
+  const stats = new Map<string, {
+    client_id: string;
+    name: string;
+    totalUpvotes: number;
+    acceptedSongs: number;
+    topTrackTitle: string;
+    topTrackUpvotes: number;
+  }>();
+
+  for (const track of queue) {
+    if (track.is_master_list || !track.client_id) continue;
+    const cid = track.client_id;
+    const guestName = clientNamesMap.get(cid) || track.requested_by || 'Anonymous Guest';
+
+    if (!stats.has(cid)) {
+      stats.set(cid, {
+        client_id: cid,
+        name: guestName,
+        totalUpvotes: track.upvotes,
+        acceptedSongs: 1,
+        topTrackTitle: track.title,
+        topTrackUpvotes: track.upvotes,
+      });
+    } else {
+      const existing = stats.get(cid)!;
+      existing.totalUpvotes += track.upvotes;
+      existing.acceptedSongs += 1;
+      if (track.upvotes > existing.topTrackUpvotes) {
+        existing.topTrackUpvotes = track.upvotes;
+        existing.topTrackTitle = track.title;
+      }
+    }
+  }
+
+  // Sort descending by total upvotes, then by accepted songs
+  return Array.from(stats.values()).sort((a, b) => {
+    if (b.totalUpvotes !== a.totalUpvotes) {
+      return b.totalUpvotes - a.totalUpvotes;
+    }
+    return b.acceptedSongs - a.acceptedSongs;
+  });
+}
+
 const emitQueueUpdate = () => {
   io.emit('queue-updated', queue);
+  io.emit('leaderboard-updated', computeLeaderboard());
 };
 
 const emitStateUpdate = () => {
@@ -346,7 +405,6 @@ app.post('/api/queue', (req, res) => {
     channel_title, 
     thumbnail_url, 
     requested_by, 
-    dedication_note, 
     is_master_list 
   } = req.body;
 
@@ -403,11 +461,14 @@ app.post('/api/queue', (req, res) => {
 
   // E. Profanity Filter Sanitization
   let sanitizedName = (requested_by && requested_by.trim()) ? requested_by.trim() : 'Party Guest';
-  let sanitizedNote = dedication_note || '';
 
   if (settings.profanityFilterEnabled) {
     sanitizedName = sanitizeProfanity(sanitizedName);
-    sanitizedNote = sanitizeProfanity(sanitizedNote);
+  }
+
+  // Track name in map for leaderboard
+  if (!is_master_list && clientId) {
+    clientNamesMap.set(clientId, sanitizedName);
   }
 
   const newEntry: QueueTrack = {
@@ -418,7 +479,6 @@ app.post('/api/queue', (req, res) => {
     channel_title: channel_title || 'YouTube Music',
     thumbnail_url: thumbnail_url || `https://i.ytimg.com/vi/${youtube_id}/hqdefault.jpg`,
     requested_by: sanitizedName,
-    dedication_note: sanitizedNote,
     upvotes: 1,
     is_master_list: !!is_master_list,
     status: 'pending',
@@ -536,6 +596,11 @@ app.post('/api/queue/:id/pin', (req, res) => {
   }
 });
 
+// 8. Party Leaderboard API (Returns Top Contributors based on total upvotes)
+app.get('/api/leaderboard', (req, res) => {
+  res.json(computeLeaderboard());
+});
+
 // === DJ ADMIN CONTROLS & AUTH ===
 
 // Get Global State & Settings
@@ -589,6 +654,17 @@ app.post('/api/admin/announcement', (req, res) => {
   res.json({ success: true, announcement: globalState.announcement });
 });
 
+// DJ Trigger Top 3 Party MVP Reveal Toggle
+app.post('/api/admin/mvp-reveal', (req, res) => {
+  const { pin, active } = req.body;
+  if (pin && pin !== adminPin) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid PIN' });
+  }
+  globalState.mvpRevealActive = typeof active === 'boolean' ? active : !globalState.mvpRevealActive;
+  emitStateUpdate();
+  res.json({ success: true, mvpRevealActive: globalState.mvpRevealActive });
+});
+
 // Change Admin PIN
 app.post('/api/admin/change-pin', (req, res) => {
   const { oldPin, newPin } = req.body;
@@ -609,6 +685,7 @@ app.post(['/api/admin/reset', '/api/queue/reset'], (req, res) => {
   clientLastRequestTime.clear();
   clientUpvotesMap.clear();
   globalState.nowPlayingTrackId = null;
+  globalState.mvpRevealActive = false;
   emitQueueUpdate();
   emitStateUpdate();
   res.json({ success: true, count: queue.length });
@@ -620,7 +697,7 @@ app.delete('/api/admin/history', (req, res) => {
   res.json({ success: true, message: 'Played history cleared' });
 });
 
-// 8. 3-Tiered Search API (Tier 1: YouTube v3 API -> Tier 2: Invidious Instances -> Tier 3: Local curated + promptUrlPaste)
+// 9. 3-Tiered Search API (Tier 1: YouTube v3 API -> Tier 2: Invidious Instances -> Tier 3: Local curated + promptUrlPaste)
 app.get('/api/search', async (req, res) => {
   const { q } = req.query;
   const query = (q as string || '').trim().toLowerCase();
@@ -753,6 +830,18 @@ app.get('/api/search', async (req, res) => {
 io.on('connection', (socket) => {
   socket.emit('queue-updated', queue);
   socket.emit('state-updated', globalState);
+  socket.emit('leaderboard-updated', computeLeaderboard());
+
+  // Real-time live emoji party reactions from guest phones
+  socket.on('send-reaction', (data: { emoji: string; sender?: string }) => {
+    io.emit('new-reaction', {
+      id: crypto.randomUUID(),
+      emoji: data.emoji || '🔥',
+      sender: data.sender || 'Guest',
+      timestamp: Date.now(),
+      xPos: Math.floor(Math.random() * 80) + 10 // randomized horizontal position percentage
+    });
+  });
 });
 
 async function startServer() {

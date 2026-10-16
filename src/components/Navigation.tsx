@@ -61,8 +61,8 @@ export function Navigation({ queue = [], isLocked = false }: NavigationProps) {
             </div>
           </NavLink>
 
-          {/* Navigation Links for Admin / Stage Displays */}
-          <nav className="flex items-center gap-1 sm:gap-1.5 p-1 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-inner">
+          {/* Navigation Links for Admin / Stage Displays - horizontally scrollable without breaking on small screens */}
+          <nav className="flex items-center gap-1 sm:gap-1.5 p-1 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-inner max-w-full overflow-x-auto shrink-0">
             <NavLink
               to="/request"
               className={({ isActive }) =>

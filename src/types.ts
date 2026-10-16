@@ -6,7 +6,7 @@ export interface QueueItem {
   channel_title: string;
   thumbnail_url: string;
   requested_by: string;
-  dedication_note: string;
+  dedication_note?: string;
   upvotes: number;
   is_master_list: boolean;
   status: 'pending' | 'playing' | 'played';
@@ -28,9 +28,19 @@ export interface DjSettings {
   vibeTagFilter?: string;
 }
 
+export interface PartyContributor {
+  client_id: string;
+  name: string;
+  totalUpvotes: number;
+  acceptedSongs: number;
+  topTrackTitle: string;
+  topTrackUpvotes: number;
+}
+
 export interface GlobalState {
   isLocked: boolean;
   nowPlayingTrackId: string | null;
   announcement?: string | null;
   settings: DjSettings;
+  mvpRevealActive?: boolean; // DJ activates Party MVP Top 3 reveal at end of event
 }
