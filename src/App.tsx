@@ -64,7 +64,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans selection:bg-orange-500 selection:text-white">
+      <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans selection:bg-indigo-600 selection:text-white">
         {/* Global Navigation Header with 4 Views */}
         <Navigation queue={queue} isLocked={globalState.isLocked} />
 

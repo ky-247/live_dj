@@ -20,10 +20,10 @@ export type EqualizerMode =
   | 'dot-matrix';
 
 export type ColorTheme = 
-  | 'cyber-desi' 
-  | 'tokyo-neon' 
-  | 'inferno' 
-  | 'acid-emerald';
+  | 'royal-indigo' 
+  | 'aurora-luxe' 
+  | 'titanium-gold' 
+  | 'tokyo-midnight';
 
 export type SizePreset = 'default' | 'large' | 'jumbo' | 'colossal';
 
@@ -46,10 +46,10 @@ const MODES: { id: EqualizerMode; label: string; icon: any }[] = [
 ];
 
 const THEMES: { id: ColorTheme; label: string; colors: [string, string, string] }[] = [
-  { id: 'cyber-desi', label: 'Cyber Bollywood', colors: ['#ec4899', '#f97316', '#fbbf24'] },
-  { id: 'tokyo-neon', label: 'Tokyo Cyber', colors: ['#06b6d4', '#8b5cf6', '#ec4899'] },
-  { id: 'inferno', label: 'Inferno Drop', colors: ['#ef4444', '#f97316', '#eab308'] },
-  { id: 'acid-emerald', label: 'Acid Rave', colors: ['#10b981', '#06b6d4', '#a855f7'] },
+  { id: 'royal-indigo', label: 'Royal Indigo', colors: ['#6366f1', '#8b5cf6', '#06b6d4'] },
+  { id: 'aurora-luxe', label: 'Aurora Luxe', colors: ['#10b981', '#06b6d4', '#6366f1'] },
+  { id: 'titanium-gold', label: 'Titanium Gold', colors: ['#e2e8f0', '#d97706', '#f59e0b'] },
+  { id: 'tokyo-midnight', label: 'Midnight Blue', colors: ['#3b82f6', '#6366f1', '#a855f7'] },
 ];
 
 const SIZE_PRESETS: { id: SizePreset; label: string; heightClass: string }[] = [
@@ -67,7 +67,7 @@ export function StageEqualizer({
   allowSizeScaling = true,
 }: StageEqualizerProps) {
   const [mode, setMode] = useState<EqualizerMode>('neon-bars');
-  const [theme, setTheme] = useState<ColorTheme>('cyber-desi');
+  const [theme, setTheme] = useState<ColorTheme>('royal-indigo');
   const [autoCycle, setAutoCycle] = useState(false);
   const [sizePreset, setSizePreset] = useState<SizePreset>('default');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -242,13 +242,13 @@ export function StageEqualizer({
   }, [mode, theme, isPlaying, activeHeightClass]);
 
   return (
-    <div className={`relative w-full rounded-2xl sm:rounded-3xl bg-neutral-950/90 border border-pink-500/35 backdrop-blur-xl p-3 sm:p-5 shadow-[0_0_40px_rgba(236,72,153,0.22)] flex flex-col justify-between overflow-hidden select-none transition-all duration-300 ${className}`}>
+    <div className={`relative w-full rounded-2xl sm:rounded-3xl bg-neutral-950/90 border border-indigo-500/25 backdrop-blur-xl p-3 sm:p-5 shadow-[0_0_40px_rgba(99,102,241,0.15)] flex flex-col justify-between overflow-hidden select-none transition-all duration-300 ${className}`}>
       {/* Top Header / Mode Switcher bar */}
       {showControls && (
         <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-neutral-800/80 z-10">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-pink-500 animate-pulse shadow-[0_0_10px_#ec4899]" />
-            <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-pink-300">
+            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_10px_#6366f1]" />
+            <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-indigo-300">
               {MODES.find((m) => m.id === mode)?.label}
             </span>
             <span className="text-[10px] text-neutral-400 uppercase font-mono px-2 py-0.5 rounded-full bg-neutral-900 border border-neutral-800 hidden sm:inline">
@@ -269,7 +269,7 @@ export function StageEqualizer({
                     title={m.label}
                     className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       isActive
-                        ? 'bg-gradient-to-r from-pink-600 to-orange-500 text-white shadow-[0_0_14px_rgba(236,72,153,0.6)]'
+                        ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[0_0_14px_rgba(99,102,241,0.5)]'
                         : 'text-neutral-400 hover:text-white hover:bg-neutral-800/60'
                     }`}
                   >
@@ -288,9 +288,9 @@ export function StageEqualizer({
                   setSizePreset(SIZE_PRESETS[(idx + 1) % SIZE_PRESETS.length].id);
                 }}
                 title={`Scale Equalizer Size (Key: S, Current: ${SIZE_PRESETS.find((s) => s.id === sizePreset)?.label})`}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-pink-500/50 text-xs font-bold text-neutral-300 hover:text-white transition-all cursor-pointer"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-indigo-500/50 text-xs font-bold text-neutral-300 hover:text-white transition-all cursor-pointer"
               >
-                <Maximize2 className="w-3 h-3 text-orange-400" />
+                <Maximize2 className="w-3 h-3 text-indigo-400" />
                 <span className="text-[11px]">{SIZE_PRESETS.find((s) => s.id === sizePreset)?.label}</span>
               </button>
             )}
@@ -316,9 +316,9 @@ export function StageEqualizer({
                 setTheme(THEMES[(idx + 1) % THEMES.length].id);
               }}
               title={`Switch color palette (Key: T, Current: ${THEMES.find((t) => t.id === theme)?.label})`}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs font-medium text-neutral-300 hover:text-white hover:border-pink-500/40 transition-colors cursor-pointer"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs font-medium text-neutral-300 hover:text-white hover:border-indigo-500/40 transition-colors cursor-pointer"
             >
-              <Palette className="w-3.5 h-3.5 text-pink-400" />
+              <Palette className="w-3.5 h-3.5 text-indigo-400" />
               <span className="text-[11px] hidden md:inline">Theme</span>
             </button>
           </div>
@@ -339,22 +339,6 @@ export function StageEqualizer({
             background: `radial-gradient(circle at 50% 50%, ${THEMES.find((t) => t.id === theme)?.colors[0]}, transparent 75%)`
           }}
         />
-      </div>
-
-      {/* Bottom frequency marker labels */}
-      <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-mono text-neutral-400 pt-2 border-t border-neutral-900 px-1">
-        <span className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-pink-500 inline-block" />
-          30Hz • SUB-BASS
-        </span>
-        <span className="hidden sm:inline">120Hz • PUNCH</span>
-        <span>500Hz • BODY</span>
-        <span className="hidden sm:inline">2.5kHz • VOCALS</span>
-        <span>8kHz • AIR</span>
-        <span className="flex items-center gap-1">
-          16kHz • BRILLIANCE
-          <span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block" />
-        </span>
       </div>
     </div>
   );

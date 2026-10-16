@@ -278,7 +278,7 @@ export function PlayerPage() {
     return (
       <div className="min-h-[calc(100vh-4rem)] bg-neutral-950 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-neutral-900 border border-neutral-800 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6 animate-in fade-in zoom-in-95">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/25">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-indigo-600 via-violet-600 to-sky-500 flex items-center justify-center shadow-lg shadow-indigo-500/25">
             <Lock className="w-8 h-8 text-white" />
           </div>
 
@@ -302,7 +302,7 @@ export function PlayerPage() {
                 key={idx}
                 className={`w-4 h-4 rounded-full border-2 transition-all ${
                   pinInput.length > idx
-                    ? 'bg-orange-500 border-orange-500 scale-110'
+                    ? 'bg-indigo-600 border-indigo-500 scale-110'
                     : 'border-neutral-700 bg-neutral-800'
                 }`}
               />
@@ -355,11 +355,11 @@ export function PlayerPage() {
               placeholder="Or type PIN (default: 1234)"
               value={pinInput}
               onChange={(e) => setPinInput(e.target.value)}
-              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl py-2 px-3 text-center text-sm tracking-widest text-white focus:outline-none focus:border-orange-500"
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl py-2 px-3 text-center text-sm tracking-widest text-white focus:outline-none focus:border-indigo-500"
             />
             <button
               type="submit"
-              className="w-full mt-3 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-pink-500 hover:opacity-90 font-bold text-sm text-white shadow-lg shadow-orange-500/25 cursor-pointer"
+              className="w-full mt-3 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 font-bold text-sm text-white shadow-lg shadow-indigo-600/25 cursor-pointer"
             >
               Unlock Stage Player
             </button>
@@ -422,10 +422,10 @@ export function PlayerPage() {
       <div className="flex-1 flex flex-col justify-between p-4 sm:p-6 lg:p-8 relative z-10 overflow-y-auto">
         {/* DJ Live Announcement Ticker Banner */}
         {globalState.announcement && (
-          <div className="mb-4 bg-gradient-to-r from-purple-900/90 via-pink-900/90 to-amber-900/90 border border-pink-500/40 rounded-2xl px-4 py-2.5 flex items-center gap-3 shadow-lg animate-in fade-in">
-            <Megaphone className="w-5 h-5 text-amber-300 animate-bounce flex-shrink-0" />
+          <div className="mb-4 bg-gradient-to-r from-indigo-950/90 via-neutral-900 to-violet-950/90 border border-indigo-500/30 rounded-2xl px-4 py-2.5 flex items-center gap-3 shadow-lg animate-in fade-in">
+            <Megaphone className="w-5 h-5 text-indigo-300 animate-bounce flex-shrink-0" />
             <div className="flex-1 overflow-hidden">
-              <span className="text-[11px] uppercase font-bold text-amber-300 tracking-wider mr-2">
+              <span className="text-[11px] uppercase font-bold text-indigo-300 tracking-wider mr-2">
                 DJ Announcement:
               </span>
               <span className="text-xs sm:text-sm font-semibold text-white">
@@ -482,7 +482,7 @@ export function PlayerPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={togglePlayPause}
-              className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-orange-500 to-pink-500 hover:opacity-90 flex items-center justify-center text-white shadow-lg shadow-orange-500/25 transition-all cursor-pointer"
+              className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 hover:opacity-90 flex items-center justify-center text-white shadow-lg shadow-indigo-600/25 transition-all cursor-pointer"
               title={isPlaying ? 'Pause' : 'Play'}
             >
               {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-white" />}
@@ -516,7 +516,7 @@ export function PlayerPage() {
                 max="100"
                 value={isMuted ? 0 : volume}
                 onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                className="w-20 sm:w-28 accent-orange-500 cursor-pointer"
+                className="w-20 sm:w-28 accent-indigo-500 cursor-pointer"
                 title={`Volume: ${volume}%`}
               />
               <span className="text-xs font-mono text-neutral-400 w-8">
@@ -530,7 +530,7 @@ export function PlayerPage() {
               onClick={() => setShowQueueSidebar(!showQueueSidebar)}
               className="lg:hidden flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold text-neutral-300 transition-colors"
             >
-              <ListMusic className="w-4 h-4 text-orange-400" />
+              <ListMusic className="w-4 h-4 text-indigo-400" />
               <span>Queue ({upcomingTracks.length})</span>
             </button>
 
@@ -553,10 +553,10 @@ export function PlayerPage() {
       >
         <div className="p-4 border-b border-neutral-800/80 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ListMusic className="w-4 h-4 text-orange-400" />
+            <ListMusic className="w-4 h-4 text-indigo-400" />
             <span className="font-bold text-sm text-neutral-200">Upcoming Auto-Queue</span>
           </div>
-          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-neutral-800 text-amber-300">
+          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-neutral-800 text-indigo-300">
             {upcomingTracks.length} ready
           </span>
         </div>
@@ -599,8 +599,8 @@ export function PlayerPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-2 text-[11px] text-neutral-400 mt-1">
-                  <span className="text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.2 rounded">
-                    👍 {item.upvotes}
+                  <span className="text-cyan-400 font-bold bg-cyan-500/10 px-1.5 py-0.2 rounded border border-cyan-500/20">
+                    ▲ {item.upvotes}
                   </span>
                   <span>•</span>
                   <span className="truncate">{item.requested_by}</span>
@@ -627,7 +627,7 @@ export function PlayerPage() {
 
         {/* Stage Operator Quick Tip */}
         <div className="p-4 bg-neutral-950 border-t border-neutral-800/80 text-xs text-neutral-400 flex items-center gap-2">
-          <Tv className="w-4 h-4 text-orange-400 flex-shrink-0" />
+          <Tv className="w-4 h-4 text-indigo-400 flex-shrink-0" />
           <span>Connected to stage speakers. Audio only — visual equalizer active.</span>
         </div>
       </div>

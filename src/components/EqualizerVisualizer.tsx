@@ -56,8 +56,8 @@ export function EqualizerVisualizer({ track, isPlaying }: EqualizerProps) {
     <div className="relative w-full h-full flex flex-col justify-between p-6 md:p-12 overflow-hidden select-none">
       {/* Ambient background party glow & laser beams */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-600/15 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/3 right-1/4 w-96 h-96 bg-pink-600/15 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/15 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-1/3 right-1/4 w-96 h-96 bg-violet-600/15 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-900/10 rounded-full blur-[100px]" />
       </div>
 
@@ -79,8 +79,8 @@ export function EqualizerVisualizer({ track, isPlaying }: EqualizerProps) {
             <span>Master Playlist Fallback</span>
           </div>
         ) : (
-          <div className="text-xs font-semibold px-3 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1.5">
-            <Heart className="w-3.5 h-3.5 text-pink-500 fill-pink-500" />
+          <div className="text-xs font-semibold px-3 py-1 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 flex items-center gap-1.5">
+            <Heart className="w-3.5 h-3.5 text-indigo-400 fill-indigo-400" />
             <span>Crowd Request • {track.upvotes} Upvotes</span>
           </div>
         )}
@@ -90,7 +90,7 @@ export function EqualizerVisualizer({ track, isPlaying }: EqualizerProps) {
       <div className="relative z-10 my-auto flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-14 max-w-5xl mx-auto w-full">
         {/* Animated Spinning DJ Disc with album art */}
         <div className="relative group flex-shrink-0">
-          <div className="w-48 h-48 md:w-64 md:h-64 rounded-full bg-neutral-950 border-4 border-neutral-800 shadow-[0_0_50px_rgba(249,115,22,0.25)] flex items-center justify-center relative overflow-hidden">
+          <div className="w-48 h-48 md:w-64 md:h-64 rounded-full bg-neutral-950 border-4 border-neutral-800 shadow-[0_0_50px_rgba(99,102,241,0.2)] flex items-center justify-center relative overflow-hidden">
             {/* Vinyl grooved circles */}
             <div className="absolute inset-2 rounded-full border border-neutral-800/80"></div>
             <div className="absolute inset-6 rounded-full border border-neutral-800/60"></div>
@@ -98,7 +98,7 @@ export function EqualizerVisualizer({ track, isPlaying }: EqualizerProps) {
             
             {/* Spinning artwork disc */}
             <div
-              className={`w-28 h-28 md:w-36 md:h-36 rounded-full overflow-hidden border-2 border-amber-400/40 shadow-inner ${
+              className={`w-28 h-28 md:w-36 md:h-36 rounded-full overflow-hidden border-2 border-indigo-400/40 shadow-inner ${
                 isPlaying ? 'animate-[spin_10s_linear_infinite]' : ''
               }`}
             >
@@ -115,13 +115,13 @@ export function EqualizerVisualizer({ track, isPlaying }: EqualizerProps) {
 
           {/* Pulse ring when playing */}
           {isPlaying && (
-            <div className="absolute -inset-2 rounded-full border border-orange-500/30 animate-ping pointer-events-none"></div>
+            <div className="absolute -inset-2 rounded-full border border-indigo-500/30 animate-ping pointer-events-none"></div>
           )}
         </div>
 
         {/* Big Stage Typography */}
         <div className="flex-1 text-center lg:text-left space-y-4 min-w-0">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-900/80 border border-neutral-800 text-xs font-semibold text-orange-400">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-900/80 border border-neutral-800 text-xs font-semibold text-indigo-400">
             <Mic2 className="w-3.5 h-3.5" />
             <span>NOW BLASTING</span>
           </div>
@@ -138,12 +138,12 @@ export function EqualizerVisualizer({ track, isPlaying }: EqualizerProps) {
           <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-3">
             <div className="inline-flex items-center gap-2 bg-neutral-900/90 border border-neutral-800/90 rounded-2xl px-4 py-2 backdrop-blur-md shadow-xl text-xs sm:text-sm">
               <span className="text-neutral-400">Requested by</span>
-              <span className="text-amber-300 font-bold bg-amber-500/10 px-2.5 py-0.5 rounded-lg border border-amber-500/20">
+              <span className="text-indigo-200 font-bold bg-indigo-500/10 px-2.5 py-0.5 rounded-lg border border-indigo-500/20">
                 {track.requested_by || 'Guest'}
               </span>
             </div>
 
-            <div className="inline-flex items-center gap-1.5 bg-orange-500/15 border border-orange-500/30 rounded-2xl px-3.5 py-2 text-xs sm:text-sm font-bold text-orange-300">
+            <div className="inline-flex items-center gap-1.5 bg-indigo-500/15 border border-indigo-500/30 rounded-2xl px-3.5 py-2 text-xs sm:text-sm font-bold text-indigo-300">
               <span>🔥 {track.upvotes} Upvotes</span>
             </div>
           </div>

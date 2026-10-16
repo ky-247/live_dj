@@ -177,15 +177,15 @@ export function TvPage() {
     >
       {/* Dynamic Laser & Neon Glow Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-32 left-1/4 w-[650px] h-[650px] bg-pink-600/20 rounded-full blur-[140px] animate-pulse" />
-        <div className="absolute top-1/3 -right-32 w-[600px] h-[600px] bg-orange-600/20 rounded-full blur-[160px] animate-pulse" style={{ animationDelay: '1.2s' }} />
-        <div className="absolute -bottom-32 left-1/3 w-[700px] h-[700px] bg-cyan-600/20 rounded-full blur-[150px] animate-pulse" style={{ animationDelay: '2.4s' }} />
+        <div className="absolute -top-32 left-1/4 w-[650px] h-[650px] bg-indigo-600/15 rounded-full blur-[140px] animate-pulse" />
+        <div className="absolute top-1/3 -right-32 w-[600px] h-[600px] bg-violet-600/15 rounded-full blur-[160px] animate-pulse" style={{ animationDelay: '1.2s' }} />
+        <div className="absolute -bottom-32 left-1/3 w-[700px] h-[700px] bg-cyan-600/15 rounded-full blur-[150px] animate-pulse" style={{ animationDelay: '2.4s' }} />
         
-        {/* Subtle Neon Grid Lines for Cyberpunk Stage vibe */}
+        {/* Subtle Grid Lines for Stage vibe */}
         <div 
-          className="absolute inset-0 opacity-[0.06]" 
+          className="absolute inset-0 opacity-[0.05]" 
           style={{ 
-            backgroundImage: 'radial-gradient(circle at 1px 1px, #ff007f 1px, transparent 0)',
+            backgroundImage: 'radial-gradient(circle at 1px 1px, #6366f1 1px, transparent 0)',
             backgroundSize: '40px 40px' 
           }} 
         />
@@ -210,26 +210,26 @@ export function TvPage() {
       </div>
 
       {/* Header Bar */}
-      <header className="relative z-20 flex items-center justify-between pb-3 sm:pb-4 border-b border-pink-500/20">
+      <header className="relative z-20 flex items-center justify-between pb-3 sm:pb-4 border-b border-indigo-500/20">
         <div className="flex items-center gap-3 sm:gap-4">
-          <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-pink-600 via-orange-500 to-amber-400 p-[2px] shadow-[0_0_25px_rgba(236,72,153,0.5)]">
+          <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 via-violet-600 to-sky-500 p-[2px] shadow-[0_0_25px_rgba(99,102,241,0.35)]">
             <div className="w-full h-full bg-black rounded-2xl flex items-center justify-center">
-              <Radio className="w-5 h-5 sm:w-7 sm:h-7 text-pink-400 animate-pulse" />
+              <Radio className="w-5 h-5 sm:w-7 sm:h-7 text-indigo-400 animate-pulse" />
             </div>
           </div>
           <div>
             <div className="flex items-center gap-2 sm:gap-3">
-              <h1 className="text-xl sm:text-3xl md:text-4xl font-black tracking-tight bg-gradient-to-r from-pink-400 via-orange-400 to-amber-300 bg-clip-text text-transparent neon-text-glow">
+              <h1 className="text-xl sm:text-3xl md:text-4xl font-black tracking-tight bg-gradient-to-r from-white via-slate-100 to-indigo-200 bg-clip-text text-transparent">
                 DesiBeats Stage
               </h1>
-              <span className="text-[10px] sm:text-xs uppercase font-extrabold px-2.5 sm:px-3 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/40 shadow-[0_0_12px_rgba(236,72,153,0.3)]">
+              <span className="text-[10px] sm:text-xs uppercase font-extrabold px-2.5 sm:px-3 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
                 LIVE PROJECTOR
               </span>
             </div>
             <p className="text-xs sm:text-sm text-neutral-400 mt-0.5 hidden sm:flex items-center gap-2">
               <span>Scan QR on phone to request & upvote</span>
               <span className="text-neutral-600">•</span>
-              <span className="text-pink-400 font-medium">Bhangra & Bollywood Anthems</span>
+              <span className="text-indigo-300 font-medium">Bhangra & Bollywood Anthems</span>
             </p>
           </div>
         </div>
@@ -242,7 +242,7 @@ export function TvPage() {
               title="Panoramic Equalizer Centerstage (Key: V)"
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 layoutMode === 'panoramic'
-                  ? 'bg-gradient-to-r from-pink-600 to-orange-500 text-white shadow-[0_0_12px_rgba(236,72,153,0.5)]'
+                  ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[0_0_12px_rgba(99,102,241,0.4)]'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
@@ -255,7 +255,7 @@ export function TvPage() {
               title="Split Deck View (Key: V)"
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 layoutMode === 'split'
-                  ? 'bg-gradient-to-r from-pink-600 to-orange-500 text-white shadow-[0_0_12px_rgba(236,72,153,0.5)]'
+                  ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[0_0_12px_rgba(99,102,241,0.4)]'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
@@ -268,7 +268,7 @@ export function TvPage() {
               title="Full Stage Visualizer Wall (Key: V)"
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 layoutMode === 'wall'
-                  ? 'bg-gradient-to-r from-pink-600 to-orange-500 text-white shadow-[0_0_12px_rgba(236,72,153,0.5)]'
+                  ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[0_0_12px_rgba(99,102,241,0.4)]'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
@@ -296,7 +296,7 @@ export function TvPage() {
             onClick={toggleFullscreen}
             aria-label="Toggle Fullscreen Projector (Key: F)"
             title="Fullscreen (F)"
-            className="p-2 sm:p-2.5 rounded-2xl bg-neutral-900/80 border border-neutral-800 text-neutral-300 hover:text-white hover:border-pink-500/50 transition-all shadow-md cursor-pointer"
+            className="p-2 sm:p-2.5 rounded-2xl bg-neutral-900/80 border border-neutral-800 text-neutral-300 hover:text-white hover:border-indigo-500/50 transition-all shadow-md cursor-pointer"
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4 sm:w-5 sm:h-5" /> : <Maximize2 className="w-4 h-4 sm:w-5 sm:h-5" />}
           </button>
@@ -305,12 +305,12 @@ export function TvPage() {
 
       {/* Optional DJ Stage Announcement Bar */}
       {globalState.announcement && (
-        <div className="relative z-20 my-2 sm:my-3 bg-gradient-to-r from-pink-900/80 via-purple-900/80 to-amber-900/80 border border-pink-500/40 rounded-2xl px-4 py-2 flex items-center justify-center gap-3 shadow-lg">
-          <Sparkles className="w-4 h-4 text-amber-300 animate-spin" style={{ animationDuration: '4s' }} />
+        <div className="relative z-20 my-2 sm:my-3 bg-gradient-to-r from-indigo-950/80 via-neutral-900 to-violet-950/80 border border-indigo-500/30 rounded-2xl px-4 py-2 flex items-center justify-center gap-3 shadow-lg">
+          <Sparkles className="w-4 h-4 text-indigo-300 animate-spin" style={{ animationDuration: '4s' }} />
           <span className="text-xs sm:text-sm font-bold text-white tracking-wide truncate">
             {globalState.announcement}
           </span>
-          <Sparkles className="w-4 h-4 text-pink-300 animate-spin" style={{ animationDuration: '4s' }} />
+          <Sparkles className="w-4 h-4 text-indigo-300 animate-spin" style={{ animationDuration: '4s' }} />
         </div>
       )}
 
@@ -425,8 +425,8 @@ export function TvPage() {
           {/* Top Row: Compact Now Playing Hero + High-Contrast QR Badge + Up Next Ticker */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
             {/* Now Playing Banner (7 cols) */}
-            <div className="lg:col-span-8 bg-gradient-to-r from-neutral-950/90 via-neutral-900/90 to-neutral-950/90 border-2 border-pink-500/40 rounded-3xl p-3 sm:p-4 backdrop-blur-xl shadow-[0_0_35px_rgba(236,72,153,0.25)] flex items-center gap-4">
-              <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0 rounded-2xl overflow-hidden border-2 border-pink-500/60 shadow-[0_0_20px_rgba(249,115,22,0.4)]">
+            <div className="lg:col-span-8 bg-gradient-to-r from-neutral-950/90 via-neutral-900/90 to-neutral-950/90 border-2 border-indigo-500/30 rounded-3xl p-3 sm:p-4 backdrop-blur-xl shadow-[0_0_35px_rgba(99,102,241,0.15)] flex items-center gap-4">
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0 rounded-2xl overflow-hidden border-2 border-indigo-500/40 shadow-[0_0_20px_rgba(99,102,241,0.25)]">
                 {currentTrack ? (
                   <img
                     src={currentTrack.thumbnail_url}
@@ -443,10 +443,10 @@ export function TvPage() {
               <div className="flex-1 min-w-0 space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="flex h-2 w-2 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-500 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-pink-500"></span>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
                   </span>
-                  <span className="text-[10px] sm:text-xs uppercase tracking-wider font-black text-pink-300 bg-pink-950/60 px-2.5 py-0.5 rounded-full border border-pink-500/40">
+                  <span className="text-[10px] sm:text-xs uppercase tracking-wider font-black text-cyan-300 bg-cyan-950/60 px-2.5 py-0.5 rounded-full border border-cyan-500/30">
                     NOW PLAYING
                   </span>
                   {currentTrack?.is_pinned && (
@@ -465,8 +465,8 @@ export function TvPage() {
 
                 {currentTrack && (
                   <div className="pt-1 flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-lg bg-orange-500/20 text-orange-300 text-xs font-bold flex items-center gap-1 border border-orange-500/30">
-                      <Flame className="w-3.5 h-3.5 text-orange-400" />
+                    <span className="px-2.5 py-0.5 rounded-lg bg-indigo-500/15 text-indigo-300 text-xs font-bold flex items-center gap-1 border border-indigo-500/30">
+                      <Flame className="w-3.5 h-3.5 text-indigo-400" />
                       {currentTrack.upvotes} Upvotes
                     </span>
                   </div>
@@ -475,7 +475,7 @@ export function TvPage() {
             </div>
 
             {/* High-Contrast Phone QR Card (4 cols) */}
-            <div className="lg:col-span-4 bg-gradient-to-br from-neutral-950/90 via-black to-neutral-900/90 border-2 border-pink-500/50 rounded-3xl p-3 sm:p-4 backdrop-blur-xl shadow-xl flex items-center justify-between gap-3">
+            <div className="lg:col-span-4 bg-gradient-to-br from-neutral-950/90 via-black to-neutral-900/90 border-2 border-indigo-500/30 rounded-3xl p-3 sm:p-4 backdrop-blur-xl shadow-xl flex items-center justify-between gap-3">
               <div className="flex-1 min-w-0 text-left">
                 <div className="flex items-center gap-1.5 text-amber-400 text-xs font-bold mb-1">
                   <Sparkles className="w-3.5 h-3.5" />
@@ -484,12 +484,12 @@ export function TvPage() {
                 <p className="text-xs sm:text-sm font-black text-white leading-tight">
                   Point Camera at QR
                 </p>
-                <p className="text-[10px] text-pink-300/80 mt-0.5">
+                <p className="text-[10px] text-neutral-400 mt-0.5">
                   Instant requests & live votes
                 </p>
               </div>
 
-              <div className="p-1.5 bg-white rounded-xl shadow-lg border-2 border-pink-500/40 flex-shrink-0">
+              <div className="p-1.5 bg-white rounded-xl shadow-lg border-2 border-indigo-500/30 flex-shrink-0">
                 {qrCodeDataUrl ? (
                   <img
                     src={qrCodeDataUrl}
@@ -511,7 +511,7 @@ export function TvPage() {
               isPlaying={!!currentTrack}
               heightClass="h-72 sm:h-96 md:h-[420px] lg:h-[480px]"
               showControls={true}
-              className="border-2 border-pink-500/40 shadow-[0_0_50px_rgba(236,72,153,0.3)]"
+              className="border-2 border-indigo-500/25 shadow-[0_0_50px_rgba(99,102,241,0.2)]"
             />
           </div>
 
@@ -519,7 +519,7 @@ export function TvPage() {
           {upcomingQueue.length > 0 && (
             <div className="flex items-center gap-3 overflow-x-auto py-2.5 px-4 bg-neutral-950/80 border border-neutral-800 rounded-2xl backdrop-blur-md">
               <span className="text-[11px] uppercase tracking-wider font-black text-neutral-400 flex-shrink-0 flex items-center gap-1.5">
-                <TrendingUp className="w-3.5 h-3.5 text-orange-400" />
+                <TrendingUp className="w-3.5 h-3.5 text-indigo-400" />
                 UP NEXT:
               </span>
               <div className="flex items-center gap-2 overflow-x-auto text-xs whitespace-nowrap">
@@ -528,7 +528,7 @@ export function TvPage() {
                     key={item.id}
                     className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-300"
                   >
-                    <strong className="text-pink-400">#{idx + 1}</strong>
+                    <strong className="text-indigo-300">#{idx + 1}</strong>
                     <span className="font-semibold truncate max-w-[170px]">{item.title}</span>
                     <span className="text-[10px] text-amber-400 font-bold">🔥 {item.upvotes}</span>
                   </span>
@@ -547,10 +547,10 @@ export function TvPage() {
             {/* Live Indicator */}
             <div className="flex items-center gap-3">
               <span className="relative flex h-3.5 w-3.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-500 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-pink-500"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-cyan-500"></span>
               </span>
-              <span className="text-xs sm:text-sm uppercase tracking-widest font-black text-pink-300 bg-pink-950/60 px-3.5 py-1 rounded-full border border-pink-500/40 shadow-[0_0_15px_rgba(236,72,153,0.3)]">
+              <span className="text-xs sm:text-sm uppercase tracking-widest font-black text-cyan-300 bg-cyan-950/60 px-3.5 py-1 rounded-full border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.25)]">
                 NOW PLAYING ON STAGE
               </span>
               {currentTrack?.is_pinned && (
@@ -563,8 +563,8 @@ export function TvPage() {
 
             {/* Current Track Card */}
             {currentTrack ? (
-              <div className="relative bg-gradient-to-r from-neutral-950/90 via-neutral-900/90 to-neutral-950/90 border-2 border-pink-500/40 rounded-3xl p-4 sm:p-6 backdrop-blur-xl shadow-[0_0_40px_rgba(236,72,153,0.25)] flex flex-col sm:flex-row items-center gap-5 group">
-                <div className="relative w-28 h-28 sm:w-36 sm:h-36 flex-shrink-0 rounded-2xl overflow-hidden border-2 border-pink-500/60 shadow-[0_0_30px_rgba(249,115,22,0.4)]">
+              <div className="relative bg-gradient-to-r from-neutral-950/90 via-neutral-900/90 to-neutral-950/90 border-2 border-indigo-500/30 rounded-3xl p-4 sm:p-6 backdrop-blur-xl shadow-[0_0_40px_rgba(99,102,241,0.15)] flex flex-col sm:flex-row items-center gap-5 group">
+                <div className="relative w-28 h-28 sm:w-36 sm:h-36 flex-shrink-0 rounded-2xl overflow-hidden border-2 border-indigo-500/40 shadow-[0_0_30px_rgba(99,102,241,0.2)]">
                   <img
                     src={currentTrack.thumbnail_url}
                     alt={currentTrack.title}
@@ -582,8 +582,8 @@ export function TvPage() {
                   </p>
 
                   <div className="pt-2 flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
-                    <div className="px-3 py-1 rounded-xl bg-orange-500/20 border border-orange-500/30 text-orange-300 text-xs sm:text-sm font-bold flex items-center gap-1.5">
-                      <Flame className="w-4 h-4 text-orange-400" />
+                    <div className="px-3 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs sm:text-sm font-bold flex items-center gap-1.5">
+                      <Flame className="w-4 h-4 text-indigo-400" />
                       <span>{currentTrack.upvotes} Upvotes</span>
                     </div>
 
@@ -608,25 +608,25 @@ export function TvPage() {
               isPlaying={!!currentTrack}
               heightClass="h-56 sm:h-72 md:h-84 lg:h-96"
               showControls={true}
-              className="border-2 border-pink-500/35 shadow-[0_0_35px_rgba(236,72,153,0.2)]"
+              className="border-2 border-indigo-500/25 shadow-[0_0_35px_rgba(99,102,241,0.15)]"
             />
           </div>
 
           {/* RIGHT 5 COLS: High-Contrast Neon QR Code & Up Next Queue */}
           <div className="lg:col-span-5 flex flex-col space-y-5">
             {/* Direct Phone Request QR Code Card */}
-            <div className="bg-gradient-to-br from-neutral-900/90 via-black to-neutral-900/90 border-2 border-pink-500/60 rounded-3xl p-5 backdrop-blur-xl shadow-[0_0_35px_rgba(236,72,153,0.35)] flex flex-col items-center text-center relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-pink-500/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="bg-gradient-to-br from-neutral-900/90 via-black to-neutral-900/90 border-2 border-indigo-500/30 rounded-3xl p-5 backdrop-blur-xl shadow-[0_0_35px_rgba(99,102,241,0.2)] flex flex-col items-center text-center relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
 
               <div className="flex items-center gap-2 mb-3">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                <h3 className="text-base sm:text-lg font-black uppercase tracking-wide bg-gradient-to-r from-pink-400 to-amber-300 bg-clip-text text-transparent">
+                <Sparkles className="w-4 h-4 text-indigo-400" />
+                <h3 className="text-base sm:text-lg font-black uppercase tracking-wide bg-gradient-to-r from-white via-slate-100 to-indigo-200 bg-clip-text text-transparent">
                   Pick Next Song On Your Phone
                 </h3>
               </div>
 
               {/* High Contrast Clean QR Code */}
-              <div className="p-3 bg-white rounded-2xl shadow-2xl shadow-pink-500/20 border-4 border-pink-500/40 group-hover:scale-105 transition-transform duration-300">
+              <div className="p-3 bg-white rounded-2xl shadow-2xl shadow-indigo-500/15 border-4 border-indigo-500/30 group-hover:scale-105 transition-transform duration-300">
                 {qrCodeDataUrl ? (
                   <img
                     src={qrCodeDataUrl}
@@ -644,7 +644,7 @@ export function TvPage() {
                 <p className="text-xs sm:text-sm font-bold text-white tracking-wide">
                   Open Camera ➔ Point at Code ➔ Tap Link
                 </p>
-                <p className="text-[11px] text-pink-300/80 font-medium">
+                <p className="text-[11px] text-neutral-400 font-medium">
                   Instant Requests • Live Upvotes • Floating Party Reactions 🔥
                 </p>
               </div>
@@ -654,7 +654,7 @@ export function TvPage() {
             <div className="bg-neutral-950/80 border border-neutral-800 rounded-3xl p-4 sm:p-5 backdrop-blur-md shadow-xl flex-1 flex flex-col">
               <div className="flex items-center justify-between pb-3 border-b border-neutral-800/80">
                 <div className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-orange-400" />
+                  <TrendingUp className="w-4 h-4 text-indigo-400" />
                   <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-neutral-200">
                     Up Next in Queue
                   </span>
@@ -676,7 +676,7 @@ export function TvPage() {
                           item.is_pinned 
                             ? 'bg-amber-500 text-black shadow-md' 
                             : index === 0 
-                            ? 'bg-pink-500/20 text-pink-300 border border-pink-500/40' 
+                            ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40' 
                             : 'bg-neutral-800 text-neutral-400'
                         }`}>
                           {item.is_pinned ? '★' : `#${index + 1}`}
@@ -696,8 +696,8 @@ export function TvPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5 flex-shrink-0 px-2.5 py-1 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-300 text-xs font-bold">
-                        <Flame className="w-3.5 h-3.5 text-orange-400" />
+                      <div className="flex items-center gap-1.5 flex-shrink-0 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-bold">
+                        <Flame className="w-3.5 h-3.5 text-indigo-400" />
                         <span>{item.upvotes}</span>
                       </div>
                     </div>
@@ -717,9 +717,9 @@ export function TvPage() {
             ========================================================================= */
         <main className="relative z-20 my-auto py-2 sm:py-4 flex flex-col justify-between max-w-7xl mx-auto w-full flex-1">
           {/* Top Now Playing Banner */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-neutral-950/80 border border-pink-500/40 rounded-3xl p-3 sm:p-5 backdrop-blur-xl shadow-[0_0_35px_rgba(236,72,153,0.25)]">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-neutral-950/80 border border-indigo-500/30 rounded-3xl p-3 sm:p-5 backdrop-blur-xl shadow-[0_0_35px_rgba(99,102,241,0.15)]">
             <div className="flex items-center gap-4 min-w-0">
-              <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-pink-500/60 shadow-[0_0_20px_rgba(249,115,22,0.4)] flex-shrink-0">
+              <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-indigo-500/40 shadow-[0_0_20px_rgba(99,102,241,0.2)] flex-shrink-0">
                 {currentTrack ? (
                   <img
                     src={currentTrack.thumbnail_url}
@@ -734,7 +734,7 @@ export function TvPage() {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/40">
+                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
                     CONCERT VISUALIZER
                   </span>
                   {currentTrack?.is_pinned && (
@@ -763,7 +763,7 @@ export function TvPage() {
               )}
               <div className="text-left text-xs">
                 <p className="font-extrabold text-white">Scan to Request</p>
-                <p className="text-[10px] text-pink-400 font-medium">Add songs & react live</p>
+                <p className="text-[10px] text-indigo-300 font-medium">Add songs & react live</p>
               </div>
             </div>
           </div>
@@ -774,7 +774,7 @@ export function TvPage() {
               isPlaying={!!currentTrack}
               heightClass="h-[440px] sm:h-[540px] md:h-[620px] lg:h-[700px]"
               showControls={true}
-              className="border-2 border-pink-500/40 shadow-[0_0_60px_rgba(236,72,153,0.35)]"
+              className="border-2 border-indigo-500/25 shadow-[0_0_60px_rgba(99,102,241,0.2)]"
             />
           </div>
 
@@ -782,7 +782,7 @@ export function TvPage() {
           {upcomingQueue.length > 0 && (
             <div className="flex items-center gap-3 overflow-x-auto py-2 px-4 bg-neutral-950/60 border border-neutral-800 rounded-2xl backdrop-blur-md">
               <span className="text-[11px] uppercase tracking-wider font-black text-neutral-400 flex-shrink-0 flex items-center gap-1.5">
-                <TrendingUp className="w-3.5 h-3.5 text-orange-400" />
+                <TrendingUp className="w-3.5 h-3.5 text-indigo-400" />
                 UP NEXT:
               </span>
               <div className="flex items-center gap-2 overflow-x-auto text-xs whitespace-nowrap">
@@ -791,7 +791,7 @@ export function TvPage() {
                     key={item.id}
                     className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-300"
                   >
-                    <strong className="text-pink-400">#{idx + 1}</strong>
+                    <strong className="text-indigo-300">#{idx + 1}</strong>
                     <span className="font-medium truncate max-w-[150px]">{item.title}</span>
                     <span className="text-[10px] text-amber-400">🔥 {item.upvotes}</span>
                   </span>
@@ -806,7 +806,7 @@ export function TvPage() {
       <footer className="relative z-20 pt-3 border-t border-neutral-800/80 flex flex-wrap items-center justify-between gap-4 text-xs text-neutral-400">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-pink-400" />
+            <Users className="w-4 h-4 text-indigo-400" />
             <span>Active Event: <strong className="text-white">Desi Party Night Frankfurt</strong></span>
           </div>
           <span className="text-neutral-700">•</span>

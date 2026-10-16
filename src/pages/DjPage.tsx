@@ -418,9 +418,9 @@ export function DjPage() {
     return (
       <div className="min-h-[85vh] flex items-center justify-center p-4 bg-gradient-to-b from-neutral-950 via-black to-neutral-950">
         <div className="w-full max-w-sm bg-neutral-900/90 border border-neutral-800 rounded-3xl p-6 sm:p-8 backdrop-blur-xl shadow-2xl text-center space-y-6">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-orange-500 to-pink-500 p-[2px] mx-auto shadow-lg shadow-orange-500/25">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 via-violet-600 to-sky-500 p-[2px] mx-auto shadow-lg shadow-indigo-500/25">
             <div className="w-full h-full bg-black rounded-2xl flex items-center justify-center">
-              <KeyRound className="w-8 h-8 text-orange-400" />
+              <KeyRound className="w-8 h-8 text-indigo-400" />
             </div>
           </div>
 
@@ -438,7 +438,7 @@ export function DjPage() {
                   key={idx}
                   className={`w-12 h-14 rounded-2xl border-2 flex items-center justify-center text-xl font-mono font-bold transition-all ${
                     pinInput.length > idx
-                      ? 'border-orange-500 bg-orange-500/10 text-white shadow-md shadow-orange-500/20'
+                      ? 'border-indigo-500 bg-indigo-500/10 text-white shadow-md shadow-indigo-500/20'
                       : 'border-neutral-800 bg-neutral-950 text-neutral-600'
                   }`}
                 >
@@ -473,7 +473,7 @@ export function DjPage() {
             <button
               type="submit"
               disabled={pinInput.length === 0}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-pink-500 text-white font-bold text-sm shadow-lg shadow-orange-500/25 hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-40"
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-sm shadow-lg shadow-indigo-600/25 hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-40"
             >
               Unlock DJ Console
             </button>
@@ -488,8 +488,8 @@ export function DjPage() {
     <div className="min-h-screen bg-black text-neutral-100 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto font-sans">
       {/* Toast Notification */}
       {statusMsg && (
-        <div className="fixed bottom-6 right-6 z-50 bg-neutral-900 border border-orange-500 text-orange-300 text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2 animate-bounce">
-          <CheckCircle2 className="w-4 h-4 text-orange-400" />
+        <div className="fixed bottom-6 right-6 z-50 bg-neutral-900 border border-indigo-500 text-indigo-300 text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2 animate-bounce">
+          <CheckCircle2 className="w-4 h-4 text-indigo-400" />
           <span>{statusMsg}</span>
         </div>
       )}
@@ -498,7 +498,7 @@ export function DjPage() {
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-neutral-800">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-black bg-gradient-to-r from-amber-300 via-orange-400 to-pink-500 bg-clip-text text-transparent">
+            <h1 className="text-2xl sm:text-3xl font-black bg-gradient-to-r from-white via-slate-100 to-indigo-200 bg-clip-text text-transparent">
               DJ Master Deck
             </h1>
             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -551,7 +551,7 @@ export function DjPage() {
             onClick={() => setShowSettingsPanel(!showSettingsPanel)}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
               showSettingsPanel
-                ? 'bg-orange-500 text-white border-orange-400 shadow-md shadow-orange-500/20'
+                ? 'bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-500/20'
                 : 'bg-neutral-900 text-neutral-300 border border-neutral-800 hover:bg-neutral-800'
             }`}
           >
@@ -584,13 +584,13 @@ export function DjPage() {
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => playSoundEffect('airhorn')}
-              className="py-2.5 px-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-orange-500 hover:bg-orange-500/10 text-xs font-bold text-orange-300 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              className="py-2.5 px-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-indigo-500 hover:bg-indigo-500/10 text-xs font-bold text-indigo-300 active:scale-95 transition-all flex items-center justify-center gap-1.5"
             >
               🎺 Airhorn
             </button>
             <button
               onClick={() => playSoundEffect('drop')}
-              className="py-2.5 px-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-pink-500 hover:bg-pink-500/10 text-xs font-bold text-pink-300 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              className="py-2.5 px-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-violet-500 hover:bg-violet-500/10 text-xs font-bold text-violet-300 active:scale-95 transition-all flex items-center justify-center gap-1.5"
             >
               💣 Bass Drop
             </button>
@@ -607,20 +607,20 @@ export function DjPage() {
         <div className="lg:col-span-7 bg-neutral-950 border border-neutral-800 rounded-2xl p-4">
           <form onSubmit={handleBroadcastAnnouncement} className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
-              <Megaphone className="w-4 h-4 text-orange-400 absolute left-3 top-3.5" />
+              <Megaphone className="w-4 h-4 text-indigo-400 absolute left-3 top-3.5" />
               <input
                 type="text"
                 placeholder="Broadcast a live announcement to TV and guest phones..."
                 value={announcementInput}
                 onChange={(e) => setAnnouncementInput(e.target.value)}
-                className="w-full bg-neutral-900 border border-neutral-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-orange-500"
+                className="w-full bg-neutral-900 border border-neutral-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500"
               />
             </div>
             <div className="flex gap-2">
               <button
                 type="submit"
                 disabled={isSendingAnnouncement}
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-pink-500 text-white font-bold text-xs hover:opacity-90 active:scale-95 transition-all flex items-center gap-1.5"
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-xs hover:opacity-90 active:scale-95 transition-all flex items-center gap-1.5"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>Broadcast</span>
@@ -652,7 +652,7 @@ export function DjPage() {
         <div className="bg-neutral-950 border border-neutral-800 rounded-3xl p-5 sm:p-6 space-y-6">
           <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-orange-400" />
+              <ShieldCheck className="w-5 h-5 text-indigo-400" />
               <h2 className="text-base sm:text-lg font-bold text-white">
                 Queue & Anti-Spam Constraints
               </h2>
@@ -660,7 +660,7 @@ export function DjPage() {
             <button
               onClick={handleSaveSettings}
               disabled={isSavingSettings}
-              className="px-4 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold shadow-md shadow-orange-500/20 active:scale-95 transition-all"
+              className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-500/20 active:scale-95 transition-all"
             >
               {isSavingSettings ? 'Saving...' : 'Save Settings'}
             </button>
@@ -671,7 +671,7 @@ export function DjPage() {
             <div className="space-y-2">
               <div className="flex justify-between text-xs">
                 <span className="font-semibold text-neutral-300">Request Cooldown (per guest)</span>
-                <span className="font-bold text-orange-400">{localSettings.guestCooldownSeconds}s</span>
+                <span className="font-bold text-indigo-400">{localSettings.guestCooldownSeconds}s</span>
               </div>
               <input
                 type="range"
@@ -682,7 +682,7 @@ export function DjPage() {
                 onChange={(e) =>
                   setLocalSettings({ ...localSettings, guestCooldownSeconds: parseInt(e.target.value, 10) })
                 }
-                className="w-full accent-orange-500 cursor-pointer"
+                className="w-full accent-indigo-500 cursor-pointer"
               />
               <p className="text-[11px] text-neutral-500">Time guests must wait between requests</p>
             </div>
@@ -691,7 +691,7 @@ export function DjPage() {
             <div className="space-y-2">
               <div className="flex justify-between text-xs">
                 <span className="font-semibold text-neutral-300">Duplicate Lockout Window</span>
-                <span className="font-bold text-orange-400">{localSettings.duplicateLockoutMinutes} mins</span>
+                <span className="font-bold text-indigo-400">{localSettings.duplicateLockoutMinutes} mins</span>
               </div>
               <input
                 type="range"
@@ -702,7 +702,7 @@ export function DjPage() {
                 onChange={(e) =>
                   setLocalSettings({ ...localSettings, duplicateLockoutMinutes: parseInt(e.target.value, 10) })
                 }
-                className="w-full accent-orange-500 cursor-pointer"
+                className="w-full accent-indigo-500 cursor-pointer"
               />
               <p className="text-[11px] text-neutral-500">Prevents same song being replayed too soon</p>
             </div>
@@ -711,7 +711,7 @@ export function DjPage() {
             <div className="space-y-2">
               <div className="flex justify-between text-xs">
                 <span className="font-semibold text-neutral-300">Max Queue Capacity</span>
-                <span className="font-bold text-orange-400">{localSettings.maxQueueCapacity} songs</span>
+                <span className="font-bold text-indigo-400">{localSettings.maxQueueCapacity} songs</span>
               </div>
               <input
                 type="range"
@@ -722,7 +722,7 @@ export function DjPage() {
                 onChange={(e) =>
                   setLocalSettings({ ...localSettings, maxQueueCapacity: parseInt(e.target.value, 10) })
                 }
-                className="w-full accent-orange-500 cursor-pointer"
+                className="w-full accent-indigo-500 cursor-pointer"
               />
               <p className="text-[11px] text-neutral-500">Max pending crowd songs allowed in queue</p>
             </div>
@@ -731,7 +731,7 @@ export function DjPage() {
             <div className="space-y-2">
               <div className="flex justify-between text-xs">
                 <span className="font-semibold text-neutral-300">Max Pending per Guest</span>
-                <span className="font-bold text-orange-400">{localSettings.maxRequestsPerGuest} songs</span>
+                <span className="font-bold text-indigo-400">{localSettings.maxRequestsPerGuest} songs</span>
               </div>
               <input
                 type="range"
@@ -742,7 +742,7 @@ export function DjPage() {
                 onChange={(e) =>
                   setLocalSettings({ ...localSettings, maxRequestsPerGuest: parseInt(e.target.value, 10) })
                 }
-                className="w-full accent-orange-500 cursor-pointer"
+                className="w-full accent-indigo-500 cursor-pointer"
               />
               <p className="text-[11px] text-neutral-500">Limits one guest from monopolizing queue</p>
             </div>
@@ -751,7 +751,7 @@ export function DjPage() {
             <div className="space-y-2">
               <div className="flex justify-between text-xs">
                 <span className="font-semibold text-neutral-300">Max Upvotes per Guest</span>
-                <span className="font-bold text-orange-400">{localSettings.maxUpvotesPerGuest}</span>
+                <span className="font-bold text-indigo-400">{localSettings.maxUpvotesPerGuest}</span>
               </div>
               <input
                 type="range"
@@ -762,7 +762,7 @@ export function DjPage() {
                 onChange={(e) =>
                   setLocalSettings({ ...localSettings, maxUpvotesPerGuest: parseInt(e.target.value, 10) })
                 }
-                className="w-full accent-orange-500 cursor-pointer"
+                className="w-full accent-indigo-500 cursor-pointer"
               />
               <p className="text-[11px] text-neutral-500">Total upvotes a guest device can cast tonight</p>
             </div>
@@ -776,7 +776,7 @@ export function DjPage() {
                   onChange={(e) =>
                     setLocalSettings({ ...localSettings, profanityFilterEnabled: e.target.checked })
                   }
-                  className="rounded bg-neutral-900 border-neutral-700 text-orange-500 focus:ring-0"
+                  className="rounded bg-neutral-900 border-neutral-700 text-indigo-500 focus:ring-0"
                 />
                 <span className="font-medium text-neutral-300">Profanity & Slur Filter Enabled</span>
               </label>
@@ -788,7 +788,7 @@ export function DjPage() {
                   onChange={(e) =>
                     setLocalSettings({ ...localSettings, autoCleanupPlayed: e.target.checked })
                   }
-                  className="rounded bg-neutral-900 border-neutral-700 text-orange-500 focus:ring-0"
+                  className="rounded bg-neutral-900 border-neutral-700 text-indigo-500 focus:ring-0"
                 />
                 <span className="font-medium text-neutral-300">Auto-Remove Songs Once Played</span>
               </label>
@@ -808,7 +808,7 @@ export function DjPage() {
                 onClick={() => setQueueViewTab('pending')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                   queueViewTab === 'pending'
-                    ? 'bg-orange-500 text-white'
+                    ? 'bg-indigo-600 text-white'
                     : 'bg-neutral-900 text-neutral-400 hover:text-white'
                 }`}
               >
@@ -818,7 +818,7 @@ export function DjPage() {
                 onClick={() => setQueueViewTab('played')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                   queueViewTab === 'played'
-                    ? 'bg-orange-500 text-white'
+                    ? 'bg-indigo-600 text-white'
                     : 'bg-neutral-900 text-neutral-400 hover:text-white'
                 }`}
               >
@@ -834,7 +834,7 @@ export function DjPage() {
                 placeholder="Filter songs or guest..."
                 value={filterSearch}
                 onChange={(e) => setFilterSearch(e.target.value)}
-                className="w-full bg-neutral-900 border border-neutral-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-orange-500"
+                className="w-full bg-neutral-900 border border-neutral-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500"
               />
             </div>
           </div>
@@ -847,7 +847,7 @@ export function DjPage() {
                   key={track.id}
                   className={`p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
                     track.status === 'playing'
-                      ? 'bg-orange-500/10 border-orange-500 shadow-md shadow-orange-500/10'
+                      ? 'bg-indigo-500/10 border-indigo-500 shadow-md shadow-indigo-500/10'
                       : track.is_pinned
                       ? 'bg-amber-950/20 border-amber-600/50'
                       : 'bg-neutral-900/60 border-neutral-800 hover:border-neutral-700'
@@ -883,8 +883,8 @@ export function DjPage() {
 
                   {/* Actions & Upvotes */}
                   <div className="flex items-center gap-2 self-end sm:self-center">
-                    <div className="px-2.5 py-1 rounded-xl bg-neutral-950 border border-neutral-800 text-orange-400 text-xs font-bold flex items-center gap-1">
-                      <Flame className="w-3.5 h-3.5" />
+                    <div className="px-2.5 py-1 rounded-xl bg-neutral-950 border border-neutral-800 text-indigo-300 text-xs font-bold flex items-center gap-1">
+                      <Flame className="w-3.5 h-3.5 text-indigo-400" />
                       <span>{track.upvotes}</span>
                     </div>
 
@@ -904,7 +904,7 @@ export function DjPage() {
 
                         <button
                           onClick={() => handlePlayNow(track)}
-                          className="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold flex items-center gap-1 active:scale-95 transition-all"
+                          className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1 active:scale-95 transition-all shadow-md shadow-indigo-600/20"
                         >
                           <Play className="w-3.5 h-3.5 fill-white" />
                           <span>Play</span>
@@ -972,8 +972,8 @@ export function DjPage() {
                           {contributor.name}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1 font-bold text-xs text-orange-400">
-                        <Flame className="w-3.5 h-3.5" />
+                      <div className="flex items-center gap-1 font-bold text-xs text-indigo-300">
+                        <Flame className="w-3.5 h-3.5 text-indigo-400" />
                         <span>{contributor.totalUpvotes} pts</span>
                       </div>
                     </div>
@@ -996,7 +996,7 @@ export function DjPage() {
               className={`w-full py-3 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
                 globalState.mvpRevealActive
                   ? 'bg-amber-400 text-black hover:bg-amber-300 shadow-lg shadow-amber-400/25'
-                  : 'bg-gradient-to-r from-orange-500 to-pink-500 text-white hover:opacity-90'
+                  : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:opacity-90 shadow-lg shadow-indigo-600/25'
               }`}
             >
               <Trophy className="w-4 h-4" />

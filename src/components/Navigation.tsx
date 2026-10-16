@@ -43,15 +43,15 @@ export function Navigation({ queue = [], isLocked = false }: NavigationProps) {
         <div className="flex items-center justify-between h-16">
           {/* Brand */}
           <NavLink to="/request" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-orange-600 to-pink-600 flex items-center justify-center shadow-lg shadow-orange-500/20 group-hover:scale-105 transition-transform">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-violet-600 to-sky-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform">
               <Radio className="w-5 h-5 text-white animate-pulse" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-amber-300 via-orange-400 to-pink-500 bg-clip-text text-transparent">
+                <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-white via-slate-100 to-indigo-200 bg-clip-text text-transparent">
                   DesiBeats DJ
                 </span>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/25">
                   Live Indo-DE
                 </span>
               </div>
@@ -68,7 +68,7 @@ export function Navigation({ queue = [], isLocked = false }: NavigationProps) {
               className={({ isActive }) =>
                 `flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                   isActive
-                    ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white shadow-md shadow-orange-500/25'
+                    ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-600/25'
                     : 'text-neutral-400 hover:text-white hover:bg-neutral-800/60'
                 }`
               }
@@ -76,7 +76,7 @@ export function Navigation({ queue = [], isLocked = false }: NavigationProps) {
               <Music2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span>1. Request</span>
               {pendingCount > 0 && (
-                <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/40 text-amber-200">
+                <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-black/40 text-indigo-200">
                   {pendingCount}
                 </span>
               )}
@@ -87,7 +87,7 @@ export function Navigation({ queue = [], isLocked = false }: NavigationProps) {
               className={({ isActive }) =>
                 `flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all relative ${
                   isActive
-                    ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white shadow-md shadow-orange-500/25'
+                    ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-600/25'
                     : 'text-neutral-400 hover:text-white hover:bg-neutral-800/60'
                 }`
               }
@@ -107,7 +107,7 @@ export function Navigation({ queue = [], isLocked = false }: NavigationProps) {
               className={({ isActive }) =>
                 `flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                   isActive
-                    ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white shadow-md shadow-orange-500/25'
+                    ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-600/25'
                     : 'text-neutral-400 hover:text-white hover:bg-neutral-800/60'
                 }`
               }
@@ -130,7 +130,7 @@ export function Navigation({ queue = [], isLocked = false }: NavigationProps) {
               className={({ isActive }) =>
                 `flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                   isActive
-                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md shadow-purple-500/25'
+                    ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-600/25'
                     : 'text-neutral-400 hover:text-white hover:bg-neutral-800/60'
                 }`
               }
@@ -145,9 +145,9 @@ export function Navigation({ queue = [], isLocked = false }: NavigationProps) {
             {currentlyPlaying ? (
               <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-neutral-900 border border-neutral-800 text-xs">
                 <div className="flex items-end gap-0.5 h-3">
-                  <span className="w-0.5 h-3 bg-orange-400 animate-[bounce_1s_infinite]"></span>
-                  <span className="w-0.5 h-2 bg-pink-400 animate-[bounce_1.3s_infinite_200ms]"></span>
-                  <span className="w-0.5 h-3.5 bg-amber-400 animate-[bounce_0.8s_infinite_400ms]"></span>
+                  <span className="w-0.5 h-3 bg-indigo-400 animate-[bounce_1s_infinite]"></span>
+                  <span className="w-0.5 h-2 bg-cyan-400 animate-[bounce_1.3s_infinite_200ms]"></span>
+                  <span className="w-0.5 h-3.5 bg-violet-400 animate-[bounce_0.8s_infinite_400ms]"></span>
                 </div>
                 <span className="text-neutral-400">Playing:</span>
                 <span className="font-medium text-neutral-200 truncate max-w-[150px]">

@@ -462,7 +462,7 @@ export function RequestPage() {
           className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center pointer-events-none transition-all"
           style={{ height: `${pullDistance}px`, opacity: pullDistance / 50 }}
         >
-          <div className="bg-neutral-900 border border-orange-500/50 text-orange-400 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
+          <div className="bg-neutral-900 border border-indigo-500/40 text-indigo-300 text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>{isRefreshing ? 'Refreshing live queue...' : pullDistance > 45 ? 'Release to refresh' : 'Pull to refresh'}</span>
           </div>
@@ -475,17 +475,17 @@ export function RequestPage() {
         {/* Compact Mobile Top App Bar */}
         <header className="flex items-center justify-between gap-2 pb-1">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-pink-600 via-orange-500 to-amber-400 p-[2px] shadow-md shadow-orange-500/20 shrink-0">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-violet-600 to-sky-500 p-[2px] shadow-md shadow-indigo-500/20 shrink-0">
               <div className="w-full h-full bg-black rounded-2xl flex items-center justify-center">
-                <Radio className="w-5 h-5 text-orange-400 animate-pulse" />
+                <Radio className="w-5 h-5 text-indigo-400 animate-pulse" />
               </div>
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-black bg-gradient-to-r from-pink-400 via-orange-400 to-amber-300 bg-clip-text text-transparent truncate leading-tight">
+                <h1 className="text-xl font-black bg-gradient-to-r from-white via-slate-100 to-indigo-200 bg-clip-text text-transparent truncate leading-tight">
                   DesiBeats
                 </h1>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20 shrink-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/25 shrink-0">
                   Live Indo-DE
                 </span>
               </div>
@@ -512,25 +512,25 @@ export function RequestPage() {
 
         {/* Reaction sent toast */}
         {reactionFeedback && (
-          <div className="bg-pink-950/80 border border-pink-500/40 text-pink-300 text-xs font-bold py-1 px-3 rounded-full text-center animate-fade-in shadow-md">
+          <div className="bg-indigo-950/80 border border-indigo-500/40 text-indigo-200 text-xs font-semibold py-1 px-3 rounded-full text-center animate-fade-in shadow-md">
             {reactionFeedback}
           </div>
         )}
 
         {/* Top 3 Party MVP Ceremony Banner (Visible when DJ launches ceremony) */}
         {globalState.mvpRevealActive && (
-          <div className="p-4 rounded-3xl bg-gradient-to-r from-amber-950/90 via-pink-950/90 to-orange-950/90 border-2 border-amber-400/80 shadow-[0_0_25px_rgba(251,191,36,0.35)] space-y-2 text-center">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 text-amber-300 text-[11px] font-black uppercase tracking-wider">
+          <div className="p-4 rounded-3xl bg-gradient-to-r from-neutral-950 via-indigo-950/60 to-neutral-950 border-2 border-indigo-500/50 shadow-[0_0_25px_rgba(99,102,241,0.25)] space-y-2 text-center">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-[11px] font-black uppercase tracking-wider">
               <Trophy className="w-3.5 h-3.5 text-amber-400 animate-bounce" />
               <span>PARTY MVP AWARDS LIVE ON TV!</span>
             </div>
             <h3 className="text-base font-black text-white">The Night's Top Song Selectors</h3>
             <div className="grid grid-cols-3 gap-2 pt-1">
               {leaderboard.slice(0, 3).map((item, idx) => (
-                <div key={item.client_id} className="bg-black/60 p-2 rounded-2xl border border-amber-400/30">
+                <div key={item.client_id} className="bg-black/60 p-2 rounded-2xl border border-indigo-500/30">
                   <div className="text-base">{idx === 0 ? '👑' : idx === 1 ? '🥈' : '🥉'}</div>
                   <div className="text-xs font-black text-white truncate">{item.name}</div>
-                  <div className="text-[10px] text-amber-400 font-bold">{item.totalUpvotes} upvotes</div>
+                  <div className="text-[10px] text-indigo-300 font-bold">{item.totalUpvotes} upvotes</div>
                 </div>
               ))}
             </div>
@@ -539,9 +539,9 @@ export function RequestPage() {
 
         {/* Global DJ Announcement Bar */}
         {globalState.announcement && (
-          <div className="p-3 rounded-2xl bg-gradient-to-r from-orange-600/20 via-pink-600/30 to-amber-500/20 border border-orange-500/40 backdrop-blur-md flex items-center gap-2.5 shadow-md">
-            <Megaphone className="w-4 h-4 text-amber-400 flex-shrink-0 animate-bounce" />
-            <span className="text-xs font-bold text-amber-200">
+          <div className="p-3 rounded-2xl bg-gradient-to-r from-neutral-900 via-indigo-950/40 to-neutral-900 border border-indigo-500/30 backdrop-blur-md flex items-center gap-2.5 shadow-md">
+            <Megaphone className="w-4 h-4 text-indigo-400 flex-shrink-0 animate-bounce" />
+            <span className="text-xs font-semibold text-indigo-200">
               {globalState.announcement}
             </span>
           </div>
@@ -557,13 +557,13 @@ export function RequestPage() {
 
         {/* "Where is My Song?" Pinned Live Position Card */}
         {myPendingTracks.length > 0 && (
-          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-pink-950/60 via-neutral-900 to-orange-950/60 border border-pink-500/40 shadow-[0_0_15px_rgba(236,72,153,0.15)] space-y-1.5">
-            <div className="flex items-center justify-between text-[11px] font-bold text-pink-300">
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-950/40 via-neutral-900 to-violet-950/40 border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.12)] space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] font-bold text-indigo-300">
               <span className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
                 YOUR ACTIVE REQUEST TRACKER
               </span>
-              <span className="text-amber-400 font-mono">
+              <span className="text-indigo-300 font-mono">
                 {myTotalUpvotesEarned} Total Upvotes Tonight 🔥
               </span>
             </div>
@@ -574,11 +574,11 @@ export function RequestPage() {
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-white truncate">{track.title}</p>
                     <p className="text-[11px] text-neutral-400">
-                      Position: <strong className="text-orange-400 font-black">#{queuePosition}</strong> in line (~{queuePosition * 3} mins away)
+                      Position: <strong className="text-indigo-400 font-black">#{queuePosition}</strong> in line (~{queuePosition * 3} mins away)
                     </p>
                   </div>
-                  <div className="px-2.5 py-1 rounded-xl bg-orange-500/20 border border-orange-500/40 text-orange-300 text-xs font-black flex items-center gap-1">
-                    <Flame className="w-3.5 h-3.5 text-orange-400" />
+                  <div className="px-2.5 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-black flex items-center gap-1">
+                    <Flame className="w-3.5 h-3.5 text-indigo-400" />
                     <span>{track.upvotes}</span>
                   </div>
                 </div>
@@ -614,7 +614,7 @@ export function RequestPage() {
             }}
             className={`flex-1 h-11 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'request'
-                ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white shadow-md'
+                ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-600/25'
                 : 'text-neutral-400 hover:text-white'
             }`}
           >
@@ -628,7 +628,7 @@ export function RequestPage() {
             }}
             className={`flex-1 h-11 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'queue'
-                ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white shadow-md'
+                ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-600/25'
                 : 'text-neutral-400 hover:text-white'
             }`}
           >
@@ -644,7 +644,7 @@ export function RequestPage() {
               }}
               className={`flex-1 h-11 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                 activeTab === 'leaderboard'
-                  ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white shadow-md'
+                  ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-600/25'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
@@ -666,12 +666,12 @@ export function RequestPage() {
                   placeholder="Song name or YouTube / YT Music link..."
                   value={inputQuery}
                   onChange={(e) => setInputQuery(e.target.value)}
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl pl-10 pr-24 py-3 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-orange-500 transition-colors"
+                  className="w-full bg-neutral-900 border border-neutral-800 rounded-2xl pl-10 pr-24 py-3 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500 transition-colors"
                 />
                 <button
                   type="submit"
                   disabled={isProcessing || !inputQuery.trim()}
-                  className="absolute right-1.5 top-1.5 bottom-1.5 px-3.5 rounded-xl bg-orange-500 text-white font-bold text-xs hover:bg-orange-600 disabled:opacity-40 transition-all active:scale-95 cursor-pointer flex items-center justify-center"
+                  className="absolute right-1.5 top-1.5 bottom-1.5 px-3.5 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-500 disabled:opacity-40 transition-all active:scale-95 cursor-pointer flex items-center justify-center"
                 >
                   {isProcessing ? 'Searching...' : 'Search'}
                 </button>
@@ -702,7 +702,7 @@ export function RequestPage() {
                       setInputQuery(sug.query);
                       handleSearchOrResolve(undefined, sug.query);
                     }}
-                    className="min-h-[38px] px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs font-medium text-neutral-300 hover:text-white hover:border-orange-500/50 active:scale-95 transition-all cursor-pointer flex items-center gap-1"
+                    className="min-h-[38px] px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs font-medium text-neutral-300 hover:text-white hover:border-indigo-500/50 active:scale-95 transition-all cursor-pointer flex items-center gap-1"
                   >
                     <span>+</span>
                     <span>{sug.title}</span>
@@ -740,9 +740,9 @@ export function RequestPage() {
 
             {/* Selected Track Confirmation Form */}
             {selectedTrack && (
-              <form onSubmit={handleSubmitRequest} className="bg-neutral-900/90 border border-orange-500/50 rounded-3xl p-4 space-y-3.5 shadow-xl">
+              <form onSubmit={handleSubmitRequest} className="bg-neutral-900/90 border border-indigo-500/40 rounded-3xl p-4 space-y-3.5 shadow-xl">
                 <div className="flex items-center justify-between border-b border-neutral-800 pb-2.5">
-                  <span className="text-xs font-bold text-orange-400 flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-indigo-400 flex items-center gap-1.5">
                     <CheckCircle2 className="w-4 h-4" />
                     Track Ready to Queue
                   </span>
@@ -779,7 +779,7 @@ export function RequestPage() {
                       placeholder="e.g. Rahul, Ladkiwale Squad, Ananya"
                       value={requestedBy}
                       onChange={(e) => setRequestedBy(e.target.value)}
-                      className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-orange-500"
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                 </div>
@@ -788,7 +788,7 @@ export function RequestPage() {
                 <button
                   type="submit"
                   disabled={isProcessing || cooldownRemainingMs > 0 || globalState.isLocked}
-                  className="w-full h-12 rounded-2xl bg-gradient-to-r from-orange-500 to-pink-500 text-white font-bold text-sm hover:opacity-95 disabled:opacity-40 shadow-lg shadow-orange-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full h-12 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-sm hover:opacity-95 disabled:opacity-40 shadow-lg shadow-indigo-600/25 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Send className="w-4 h-4" />
                   <span>
@@ -807,7 +807,7 @@ export function RequestPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between text-xs text-neutral-400 px-1">
               <span>Sorted by highest crowd upvotes</span>
-              <span className="font-bold text-orange-400">{sortedPendingQueue.length} Tracks Waiting</span>
+              <span className="font-bold text-indigo-300">{sortedPendingQueue.length} Tracks Waiting</span>
             </div>
 
             {sortedPendingQueue.length > 0 ? (
@@ -852,11 +852,11 @@ export function RequestPage() {
                       disabled={hasUpvoted}
                       className={`min-h-[44px] min-w-[56px] px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs active:scale-90 transition-all cursor-pointer ${
                         hasUpvoted
-                          ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40 cursor-default'
-                          : 'bg-neutral-800 hover:bg-orange-500 text-neutral-200 hover:text-white border border-neutral-700'
+                          ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 cursor-default'
+                          : 'bg-neutral-800 hover:bg-indigo-600 text-neutral-200 hover:text-white border border-neutral-700'
                       }`}
                     >
-                      <Flame className={`w-4 h-4 shrink-0 ${hasUpvoted ? 'fill-orange-400 text-orange-400' : ''}`} />
+                      <Flame className={`w-4 h-4 shrink-0 ${hasUpvoted ? 'fill-indigo-400 text-indigo-400' : ''}`} />
                       <span>{item.upvotes}</span>
                     </button>
                   </div>
@@ -888,8 +888,6 @@ export function RequestPage() {
                         ? 'bg-amber-950/30 border-amber-400/50'
                         : idx === 1
                         ? 'bg-neutral-900 border-neutral-700'
-                        : idx === 2
-                        ? 'bg-orange-950/20 border-orange-500/30'
                         : 'bg-neutral-900/50 border-neutral-800'
                     }`}
                   >
@@ -904,8 +902,8 @@ export function RequestPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="px-3 py-1.5 rounded-xl bg-orange-500/20 border border-orange-500/30 text-orange-300 font-black text-xs flex items-center gap-1.5 shrink-0">
-                      <Flame className="w-3.5 h-3.5 text-orange-400" />
+                    <div className="px-3 py-1.5 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-black text-xs flex items-center gap-1.5 shrink-0">
+                      <Flame className="w-3.5 h-3.5 text-indigo-400" />
                       <span>{user.totalUpvotes} upvotes</span>
                     </div>
                   </div>
@@ -922,10 +920,10 @@ export function RequestPage() {
 
       {/* FIXED MOBILE FOOTER: NOW PLAYING COMPACT BAR (Complies with 15% sticky cap) */}
       {currentlyPlaying && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-neutral-950/95 backdrop-blur-md border-t border-pink-500/30 px-3 py-2.5 pb-safe shadow-2xl">
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-neutral-950/95 backdrop-blur-md border-t border-indigo-500/20 px-3 py-2.5 pb-safe shadow-2xl">
           <div className="max-w-lg mx-auto flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              <div className="relative w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 border border-pink-500/40">
+              <div className="relative w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 border border-indigo-500/30">
                 <img
                   src={currentlyPlaying.thumbnail_url}
                   alt={currentlyPlaying.title}
@@ -935,10 +933,10 @@ export function RequestPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <span className="flex h-2 w-2 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-pink-500"></span>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
                   </span>
-                  <span className="text-[10px] uppercase font-bold text-pink-400 tracking-wider">
+                  <span className="text-[10px] uppercase font-bold text-cyan-400 tracking-wider">
                     ON STAGE NOW
                   </span>
                 </div>
@@ -946,8 +944,8 @@ export function RequestPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-orange-500/20 border border-orange-500/30 text-orange-300 text-xs font-bold shrink-0">
-              <Flame className="w-3.5 h-3.5 text-orange-400" />
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-bold shrink-0">
+              <Flame className="w-3.5 h-3.5 text-indigo-400" />
               <span>{currentlyPlaying.upvotes}</span>
             </div>
           </div>
