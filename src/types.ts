@@ -26,6 +26,7 @@ export interface DjSettings {
   autoCleanupPlayed: boolean;
   peakTimeFastMode: boolean;
   vibeTagFilter?: string;
+  fallbackSkipSeconds: number;
 }
 
 export interface PartyContributor {

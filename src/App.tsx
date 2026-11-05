@@ -25,6 +25,7 @@ const defaultState: GlobalState = {
     profanityFilterEnabled: true,
     autoCleanupPlayed: false,
     peakTimeFastMode: false,
+    fallbackSkipSeconds: 10,
   },
 };
 
@@ -64,7 +65,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans selection:bg-indigo-600 selection:text-white">
+      <div className="min-h-screen bg-[#191c18] text-[#efefdf] flex flex-col font-sans selection:bg-[#dfed66] selection:text-[#191c18]">
         {/* Global Navigation Header with 4 Views */}
         <Navigation queue={queue} isLocked={globalState.isLocked} />
 

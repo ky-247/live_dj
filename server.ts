@@ -1,9 +1,13 @@
+import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { createServer as createViteServer } from 'vite';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import cookieParser from 'cookie-parser';
+import { sortQueue } from './src/lib/queue';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -15,7 +19,24 @@ const io = new Server(httpServer, {
   },
 });
 
+app.use(cookieParser());
 app.use(express.json());
+
+// Issue persistent server-managed guest identity cookie (db_cid)
+app.use((req, res, next) => {
+  let cid = req.cookies?.db_cid;
+  if (!cid || typeof cid !== 'string' || !cid.trim()) {
+    cid = crypto.randomUUID();
+    res.cookie('db_cid', cid, {
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    });
+    if (!req.cookies) req.cookies = {};
+    req.cookies.db_cid = cid;
+  }
+  next();
+});
 
 interface QueueTrack {
   id: string;
@@ -32,6 +53,7 @@ interface QueueTrack {
   is_pinned?: boolean;
   client_id?: string;
   played_at?: string;
+  vibe_tag?: string;
 }
 
 interface DjSettings {
@@ -44,6 +66,7 @@ interface DjSettings {
   autoCleanupPlayed: boolean;
   peakTimeFastMode: boolean;
   vibeTagFilter?: string;
+  fallbackSkipSeconds: number;
 }
 
 interface PlayedHistoryEntry {
@@ -59,6 +82,12 @@ export interface PartyContributor {
   acceptedSongs: number;
   topTrackTitle: string;
   topTrackUpvotes: number;
+}
+
+interface VideoMetadata {
+  title: string;
+  channelTitle: string;
+  thumbnailUrl: string;
 }
 
 // Curated library of party favorites for Indian events in Germany
@@ -192,12 +221,41 @@ const initialQueue: QueueTrack[] = [
 
 let queue: QueueTrack[] = [...initialQueue];
 let playedHistory: PlayedHistoryEntry[] = [];
-let adminPin: string = '1234';
+
+// Server-side DJ Auth & Token Storage
+let runtimeDjPin: string | undefined = process.env.DJ_PIN;
+const validDjTokens = new Set<string>();
+
+// Rate-limiting for failed PIN attempts (at most 5 wrong attempts per IP per minute)
+interface PinAttemptInfo {
+  count: number;
+  resetAt: number;
+}
+const pinAttemptMap = new Map<string, PinAttemptInfo>();
+
+function getClientIp(req: express.Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.ip || req.socket.remoteAddress || '127.0.0.1';
+}
+
+function requireDj(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: Missing or invalid DJ token' });
+  }
+  const token = authHeader.slice(7).trim();
+  if (!token || !validDjTokens.has(token)) {
+    return res.status(401).json({ error: 'Unauthorized: Session expired or invalid' });
+  }
+  next();
+}
 
 // Anti-Spam Tracking Maps
 const clientLastRequestTime = new Map<string, number>();
 const clientUpvotesMap = new Map<string, Set<string>>(); // clientId -> set of track IDs
-// Guest names mapping for leaderboard
 const clientNamesMap = new Map<string, string>([
   ['client_aman_demo', 'Aman & Friends (Munich)'],
   ['client_pooja_demo', 'Pooja from Frankfurt']
@@ -207,19 +265,73 @@ let globalState = {
   isLocked: false,
   nowPlayingTrackId: null as string | null,
   announcement: null as string | null,
-  mvpRevealActive: false, // DJ can activate or reset Top 3 Party MVPs ceremony
+  mvpRevealActive: false,
   settings: {
-    guestCooldownSeconds: 180, // 3 minutes default
-    duplicateLockoutMinutes: 30, // 30 minutes lockout
-    maxQueueCapacity: 20, // max 20 pending guest tracks
-    maxRequestsPerGuest: 2, // max 2 active pending requests per guest
-    maxUpvotesPerGuest: 10, // max 10 total upvotes
+    guestCooldownSeconds: 180,
+    duplicateLockoutMinutes: 30,
+    maxQueueCapacity: 20,
+    maxRequestsPerGuest: 2,
+    maxUpvotesPerGuest: 10,
     profanityFilterEnabled: true,
     autoCleanupPlayed: false,
     peakTimeFastMode: false,
     vibeTagFilter: 'all',
+    fallbackSkipSeconds: 10,
   } as DjSettings
 };
+
+// Persistence state directory and debounce
+const DATA_DIR = join(__dirname, 'data');
+const STATE_FILE = join(DATA_DIR, 'state.json');
+
+let saveTimeout: NodeJS.Timeout | null = null;
+function scheduleStateSave() {
+  if (saveTimeout) return;
+  saveTimeout = setTimeout(() => {
+    saveTimeout = null;
+    try {
+      if (!existsSync(DATA_DIR)) {
+        mkdirSync(DATA_DIR, { recursive: true });
+      }
+      const stateToSave = {
+        queue,
+        playedHistory: playedHistory.slice(-200),
+        globalState,
+      };
+      writeFileSync(STATE_FILE, JSON.stringify(stateToSave, null, 2), 'utf-8');
+    } catch (err) {
+      console.error('Failed to save state to data/state.json:', err);
+    }
+  }, 1000);
+}
+
+function loadPersistedState() {
+  try {
+    if (existsSync(STATE_FILE)) {
+      const content = readFileSync(STATE_FILE, 'utf-8');
+      const data = JSON.parse(content);
+      if (Array.isArray(data.queue)) {
+        queue = data.queue;
+      }
+      if (Array.isArray(data.playedHistory)) {
+        playedHistory = data.playedHistory.slice(-200);
+      }
+      if (data.globalState && typeof data.globalState === 'object') {
+        globalState = {
+          ...globalState,
+          ...data.globalState,
+          settings: {
+            ...globalState.settings,
+            ...(data.globalState.settings || {}),
+          },
+        };
+      }
+      console.log(`Loaded persisted state: ${queue.length} tracks in queue, ${playedHistory.length} in history.`);
+    }
+  } catch (err) {
+    console.warn('Could not load data/state.json, starting with default queue:', err);
+  }
+}
 
 // Profanity list covering common vulgarities in English and Hindi/Desi context
 const profanityList = [
@@ -237,17 +349,13 @@ function sanitizeProfanity(text: string): string {
   return sanitized;
 }
 
-// Client Identifier helper (uses x-client-id or fallback to IP)
+// Strictly trust server-issued cookie (db_cid)
 function getClientIdentifier(req: express.Request): string {
-  const headerId = req.headers['x-client-id'] as string;
-  if (headerId && headerId.trim().length > 0) {
-    return headerId.trim();
+  const cookieId = req.cookies?.db_cid;
+  if (cookieId && typeof cookieId === 'string' && cookieId.trim().length > 0) {
+    return cookieId.trim();
   }
-  const bodyId = req.body?.client_id;
-  if (bodyId && typeof bodyId === 'string' && bodyId.trim().length > 0) {
-    return bodyId.trim();
-  }
-  return (req.ip || req.socket.remoteAddress || 'unknown-client').toString();
+  return `guest_${getClientIp(req)}`;
 }
 
 // Compute Party Leaderboard (Top contributors who got the most upvotes)
@@ -298,10 +406,12 @@ function computeLeaderboard(): PartyContributor[] {
 const emitQueueUpdate = () => {
   io.emit('queue-updated', queue);
   io.emit('leaderboard-updated', computeLeaderboard());
+  scheduleStateSave();
 };
 
 const emitStateUpdate = () => {
   io.emit('state-updated', globalState);
+  scheduleStateSave();
 };
 
 function extractYouTubeId(input: string): string | null {
@@ -333,7 +443,144 @@ function extractYouTubeId(input: string): string | null {
   return null;
 }
 
+// Shared oEmbed Lookup helper
+async function fetchOEmbedMetadata(videoId: string): Promise<VideoMetadata> {
+  try {
+    const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+    const response = await fetch(oembedUrl, { signal: AbortSignal.timeout(3500) });
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        title: data.title || `Track (${videoId})`,
+        channelTitle: data.author_name || 'YouTube Music Artist',
+        thumbnailUrl: data.thumbnail_url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+      };
+    }
+  } catch (err) {
+    console.warn(`oEmbed lookup for video ${videoId} timed out or failed:`, err);
+  }
+  return {
+    title: `YouTube Track [${videoId}]`,
+    channelTitle: 'YouTube / YouTube Music',
+    thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+  };
+}
+
+// In-memory cache for remembered song metadata from search results
+const rememberedMetadata = new Map<string, VideoMetadata>();
+for (const track of popularTracks) {
+  rememberedMetadata.set(track.videoId, {
+    title: track.title,
+    channelTitle: track.channelTitle,
+    thumbnailUrl: track.thumbnail,
+  });
+}
+
+// In-memory cache for search results (6 hours TTL)
+interface SearchCacheEntry {
+  data: any;
+  timestamp: number;
+}
+const searchCache = new Map<string, SearchCacheEntry>();
+const SEARCH_CACHE_TTL = 6 * 60 * 60 * 1000;
+
+// Daily quota tracking for YouTube Data API search calls
+let currentSearchDay = new Date().toISOString().slice(0, 10);
+let youtubeSearchCountToday = 0;
+
+// Resolve song metadata in 3-tier order:
+// 1. Remembered from search results
+// 2. Curated catalog
+// 3. Shared oEmbed lookup
+async function resolveSongMetadata(videoId: string): Promise<VideoMetadata> {
+  if (rememberedMetadata.has(videoId)) {
+    return rememberedMetadata.get(videoId)!;
+  }
+  const known = popularTracks.find((t) => t.videoId === videoId);
+  if (known) {
+    const meta = {
+      title: known.title,
+      channelTitle: known.channelTitle,
+      thumbnailUrl: known.thumbnail,
+    };
+    rememberedMetadata.set(videoId, meta);
+    return meta;
+  }
+  const oembed = await fetchOEmbedMetadata(videoId);
+  rememberedMetadata.set(videoId, oembed);
+  return oembed;
+}
+
+// Shared upvote logic (enforces limit, already-upvoted check, and pending-only rule)
+function performUpvote(trackId: string, clientId: string): { success: boolean; status?: number; error?: string; entry?: QueueTrack } {
+  const entry = queue.find((q) => q.id === trackId);
+  if (!entry) {
+    return { success: false, status: 404, error: 'Track not found in queue' };
+  }
+
+  // Refuse upvotes on tracks that are not pending
+  if (entry.status !== 'pending') {
+    return { success: false, status: 400, error: 'Cannot upvote songs that are not pending in queue' };
+  }
+
+  let upvotesSet = clientUpvotesMap.get(clientId);
+  if (!upvotesSet) {
+    upvotesSet = new Set<string>();
+    clientUpvotesMap.set(clientId, upvotesSet);
+  }
+
+  if (upvotesSet.has(trackId)) {
+    return { success: false, status: 400, error: 'You have already upvoted this song!' };
+  }
+
+  const settings = globalState.settings;
+  if (upvotesSet.size >= settings.maxUpvotesPerGuest) {
+    return {
+      success: false,
+      status: 429,
+      error: `You have reached the maximum allowed limit of ${settings.maxUpvotesPerGuest} upvotes for this event.`
+    };
+  }
+
+  entry.upvotes += 1;
+  upvotesSet.add(trackId);
+  return { success: true, entry };
+}
+
+// In-memory cache for SponsorBlock skipSegments results (caches raw SponsorBlock data only)
+interface SponsorBlockCacheEntry {
+  segments: any[];
+  timestamp: number;
+}
+const sponsorBlockCache = new Map<string, SponsorBlockCacheEntry>();
+
+async function getSponsorSegments(videoId: string): Promise<any[]> {
+  if (sponsorBlockCache.has(videoId)) {
+    return sponsorBlockCache.get(videoId)!.segments;
+  }
+  try {
+    const url = `https://sponsor.ajay.app/api/skipSegments?videoID=${encodeURIComponent(videoId)}&category=music_offtopic`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(2000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        sponsorBlockCache.set(videoId, { segments: data, timestamp: Date.now() });
+        return data;
+      }
+    }
+  } catch {
+    // 404, timeout or network issue
+  }
+  sponsorBlockCache.set(videoId, { segments: [], timestamp: Date.now() });
+  return [];
+}
+
 // === API ROUTES ===
+
+// 0. Guest identity info endpoint
+app.get('/api/me', (req, res) => {
+  res.json({ clientId: getClientIdentifier(req) });
+});
 
 // 1. Get current queue
 app.get('/api/queue', (req, res) => {
@@ -352,45 +599,18 @@ app.post('/api/resolve-link', async (req, res) => {
     return res.status(400).json({ error: 'Could not detect a valid YouTube or YouTube Music video ID.' });
   }
 
-  const known = popularTracks.find(t => t.videoId === videoId);
-  if (known) {
-    return res.json({
-      videoId: known.videoId,
-      title: known.title,
-      channelTitle: known.channelTitle,
-      thumbnailUrl: known.thumbnail,
-      source: 'curated'
-    });
-  }
-
-  try {
-    const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-    const response = await fetch(oembedUrl, { signal: AbortSignal.timeout(3500) });
-    if (response.ok) {
-      const data = await response.json();
-      return res.json({
-        videoId,
-        title: data.title || `Track (${videoId})`,
-        channelTitle: data.author_name || 'YouTube Music Artist',
-        thumbnailUrl: data.thumbnail_url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-        source: 'oembed'
-      });
-    }
-  } catch (err) {
-    console.warn('oEmbed resolve timed out or failed, using fallback thumbnail & videoId', err);
-  }
-
-  return res.json({
+  const meta = await resolveSongMetadata(videoId);
+  res.json({
     videoId,
-    title: `YouTube Track [${videoId}]`,
-    channelTitle: 'YouTube / YouTube Music',
-    thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-    source: 'fallback'
+    title: meta.title,
+    channelTitle: meta.channelTitle,
+    thumbnailUrl: meta.thumbnailUrl,
+    source: rememberedMetadata.has(videoId) ? 'cached' : 'oembed',
   });
 });
 
-// 3. Add to Queue with Advanced Anti-Spam Validation
-app.post('/api/queue', (req, res) => {
+// 3. Add to Queue (Server resolves metadata, trims name to 30 chars, applies profanity filter, handles duplicate-request upvote loophole)
+app.post('/api/queue', async (req, res) => {
   if (globalState.isLocked) {
     return res.status(403).json({ error: 'Song requests are currently paused by the DJ.' });
   }
@@ -399,21 +619,16 @@ app.post('/api/queue', (req, res) => {
   const now = Date.now();
   const settings = globalState.settings;
 
-  const { 
-    youtube_id, 
-    title, 
-    channel_title, 
-    thumbnail_url, 
-    requested_by, 
-    is_master_list 
-  } = req.body;
-
-  if (!youtube_id) {
-    return res.status(400).json({ error: 'Missing youtube_id' });
+  const rawId = req.body?.youtube_id || req.body?.url;
+  const videoId = extractYouTubeId(rawId);
+  if (!videoId) {
+    return res.status(400).json({ error: 'Invalid or missing YouTube video ID' });
   }
 
-  // A. Max Queue Capacity Constraint (for live guest requests)
-  if (!is_master_list) {
+  const isMaster = !!req.body?.is_master_list;
+
+  if (!isMaster) {
+    // A. Max Queue Capacity Constraint (for live guest requests)
     const activeGuestQueueCount = queue.filter(q => q.status === 'pending' && !q.is_master_list).length;
     if (activeGuestQueueCount >= settings.maxQueueCapacity) {
       return res.status(429).json({ 
@@ -441,16 +656,23 @@ app.post('/api/queue', (req, res) => {
       });
     }
 
-    // D. Duplicate Song Lockout Window (Checks active queue and recently played history)
-    const existingPending = queue.find(q => q.youtube_id === youtube_id && q.status === 'pending');
+    // D. Duplicate Song Check:
+    // If already pending, route through the exact same logic as normal upvote endpoint
+    const existingPending = queue.find(q => q.youtube_id === videoId && q.status === 'pending');
     if (existingPending) {
-      existingPending.upvotes += 1;
+      const upvoteRes = performUpvote(existingPending.id, clientId);
+      if (!upvoteRes.success) {
+        return res.status(upvoteRes.status || 400).json({ error: upvoteRes.error });
+      }
+      // Apply cooldown to duplicate requests as well
+      clientLastRequestTime.set(clientId, now);
       emitQueueUpdate();
       return res.json({ ...existingPending, alreadyExisted: true });
     }
 
+    // Check duplicate lockout against recently played history
     const lockoutMs = settings.duplicateLockoutMinutes * 60 * 1000;
-    const recentlyPlayed = playedHistory.find(h => h.youtube_id === youtube_id && (now - h.played_at) < lockoutMs);
+    const recentlyPlayed = playedHistory.find(h => h.youtube_id === videoId && (now - h.played_at) < lockoutMs);
     if (recentlyPlayed) {
       const minutesAgo = Math.max(1, Math.floor((now - recentlyPlayed.played_at) / 60000));
       return res.status(400).json({ 
@@ -459,39 +681,44 @@ app.post('/api/queue', (req, res) => {
     }
   }
 
-  // E. Profanity Filter Sanitization
-  let sanitizedName = (requested_by && requested_by.trim()) ? requested_by.trim() : 'Party Guest';
-
+  // E. Name validation: Trim to 30 characters and run profanity filter
+  let rawName = (req.body?.requested_by || '').toString().trim();
+  if (rawName.length > 30) {
+    rawName = rawName.slice(0, 30).trim();
+  }
+  let sanitizedName = rawName || 'Party Guest';
   if (settings.profanityFilterEnabled) {
     sanitizedName = sanitizeProfanity(sanitizedName);
   }
 
-  // Track name in map for leaderboard
-  if (!is_master_list && clientId) {
+  if (!isMaster && clientId) {
     clientNamesMap.set(clientId, sanitizedName);
   }
+
+  // F. Server looks up song metadata itself
+  const metadata = await resolveSongMetadata(videoId);
 
   const newEntry: QueueTrack = {
     id: crypto.randomUUID(),
     created_at: new Date().toISOString(),
-    youtube_id,
-    title: title || 'Requested Track',
-    channel_title: channel_title || 'YouTube Music',
-    thumbnail_url: thumbnail_url || `https://i.ytimg.com/vi/${youtube_id}/hqdefault.jpg`,
+    youtube_id: videoId,
+    title: metadata.title,
+    channel_title: metadata.channelTitle,
+    thumbnail_url: metadata.thumbnailUrl,
     requested_by: sanitizedName,
     upvotes: 1,
-    is_master_list: !!is_master_list,
+    is_master_list: isMaster,
     status: 'pending',
     is_pinned: false,
     client_id: clientId,
   };
 
   queue.push(newEntry);
-  if (!is_master_list) {
+  if (!isMaster) {
     clientLastRequestTime.set(clientId, now);
   }
 
-  // Auto-record upvote for requester
+  // Auto-record initial upvote for requester
   let upvotesSet = clientUpvotesMap.get(clientId);
   if (!upvotesSet) {
     upvotesSet = new Set<string>();
@@ -503,44 +730,21 @@ app.post('/api/queue', (req, res) => {
   res.json(newEntry);
 });
 
-// 4. Upvote with Anti-Spam Constraints
+// 4. Upvote with Anti-Spam Constraints (refuses non-pending tracks)
 app.post('/api/queue/:id/upvote', (req, res) => {
-  const { id } = req.params;
+  const id = String(req.params.id);
   const clientId = getClientIdentifier(req);
-  const settings = globalState.settings;
-
-  let upvotesSet = clientUpvotesMap.get(clientId);
-  if (!upvotesSet) {
-    upvotesSet = new Set<string>();
-    clientUpvotesMap.set(clientId, upvotesSet);
+  const result = performUpvote(id, clientId);
+  if (!result.success) {
+    return res.status(result.status || 400).json({ error: result.error });
   }
-
-  // Check if client already upvoted this track
-  if (upvotesSet.has(id)) {
-    return res.status(400).json({ error: 'You have already upvoted this song!' });
-  }
-
-  // Check maximum allowed upvotes per guest device
-  if (upvotesSet.size >= settings.maxUpvotesPerGuest) {
-    return res.status(429).json({ 
-      error: `You have reached the maximum allowed limit of ${settings.maxUpvotesPerGuest} upvotes for this event.` 
-    });
-  }
-
-  const entry = queue.find(q => q.id === id);
-  if (entry) {
-    entry.upvotes += 1;
-    upvotesSet.add(id);
-    emitQueueUpdate();
-    res.json(entry);
-  } else {
-    res.status(404).json({ error: 'Track not found in queue' });
-  }
+  emitQueueUpdate();
+  res.json(result.entry);
 });
 
-// 5. Update Status (playing / played)
-app.put('/api/queue/:id/status', (req, res) => {
-  const { id } = req.params;
+// 5. Update Status (playing / played) - DJ ONLY
+app.put('/api/queue/:id/status', requireDj, (req, res) => {
+  const id = String(req.params.id);
   const { status } = req.body;
   const entry = queue.find(q => q.id === id);
 
@@ -555,10 +759,12 @@ app.put('/api/queue/:id/status', (req, res) => {
         title: entry.title,
         played_at: Date.now(),
       });
+      if (playedHistory.length > 200) {
+        playedHistory = playedHistory.slice(-200);
+      }
       if (globalState.nowPlayingTrackId === id) {
         globalState.nowPlayingTrackId = null;
       }
-      // Auto-cleanup played tracks if setting is on
       if (globalState.settings.autoCleanupPlayed) {
         queue = queue.filter(q => q.id !== id);
       }
@@ -571,9 +777,9 @@ app.put('/api/queue/:id/status', (req, res) => {
   }
 });
 
-// 6. Delete Track
-app.delete('/api/queue/:id', (req, res) => {
-  const { id } = req.params;
+// 6. Delete Track - DJ ONLY
+app.delete('/api/queue/:id', requireDj, (req, res) => {
+  const id = String(req.params.id);
   if (globalState.nowPlayingTrackId === id) {
     globalState.nowPlayingTrackId = null;
   }
@@ -583,9 +789,24 @@ app.delete('/api/queue/:id', (req, res) => {
   res.json({ success: true });
 });
 
-// 7. VIP Pin / Unpin Song Toggle (Plays immediately next!)
-app.post('/api/queue/:id/pin', (req, res) => {
-  const { id } = req.params;
+// Restore Track - DJ ONLY (Undo functionality)
+app.post('/api/queue/restore', requireDj, (req, res) => {
+  const { track } = req.body;
+  if (!track || !track.id) {
+    return res.status(400).json({ error: 'Missing track to restore' });
+  }
+  const exists = queue.some(q => q.id === track.id);
+  if (!exists) {
+    queue.push(track);
+    emitQueueUpdate();
+    emitStateUpdate();
+  }
+  res.json({ success: true, track });
+});
+
+// 7. VIP Pin / Unpin Song Toggle - DJ ONLY
+app.post(['/api/queue/:id/pin', '/api/queue/:id/pin/toggle'], requireDj, (req, res) => {
+  const id = String(req.params.id);
   const entry = queue.find(q => q.id === id);
   if (entry) {
     entry.is_pinned = !entry.is_pinned;
@@ -596,9 +817,94 @@ app.post('/api/queue/:id/pin', (req, res) => {
   }
 });
 
-// 8. Party Leaderboard API (Returns Top Contributors based on total upvotes)
+// 8. Party Leaderboard API
 app.get('/api/leaderboard', (req, res) => {
   res.json(computeLeaderboard());
+});
+
+// === SERVER-AUTHORITATIVE TRACK ADVANCE & PRELOAD ===
+
+// POST /api/player/advance (DJ only): Marks current track played, picks next using sortQueue, marks it playing, and returns it
+app.post('/api/player/advance', requireDj, (req, res) => {
+  const now = Date.now();
+  if (globalState.nowPlayingTrackId) {
+    const current = queue.find(q => q.id === globalState.nowPlayingTrackId);
+    if (current && current.status === 'playing') {
+      current.status = 'played';
+      current.played_at = new Date().toISOString();
+      playedHistory.push({
+        youtube_id: current.youtube_id,
+        title: current.title,
+        played_at: now,
+      });
+      if (playedHistory.length > 200) {
+        playedHistory = playedHistory.slice(-200);
+      }
+      if (globalState.settings.autoCleanupPlayed) {
+        queue = queue.filter(q => q.id !== current.id);
+      }
+    }
+  }
+
+  const pending = sortQueue(queue, true);
+  if (pending.length > 0) {
+    const nextTrack = pending[0];
+    nextTrack.status = 'playing';
+    globalState.nowPlayingTrackId = nextTrack.id;
+    emitQueueUpdate();
+    emitStateUpdate();
+    return res.json({ track: nextTrack });
+  }
+
+  globalState.nowPlayingTrackId = null;
+  emitQueueUpdate();
+  emitStateUpdate();
+  res.json({ track: null });
+});
+
+// GET /api/player/upcoming (DJ only): Returns track that would play next without changing anything
+app.get('/api/player/upcoming', requireDj, (req, res) => {
+  const pending = sortQueue(queue, true);
+  res.json({ track: pending.length > 0 ? pending[0] : null });
+});
+
+// GET /api/skip-info/:videoId: SponsorBlock music_offtopic integration with fallback
+app.get('/api/skip-info/:videoId', async (req, res) => {
+  const videoId = String(req.params.videoId);
+  const segments = await getSponsorSegments(videoId);
+  const fallback = globalState.settings.fallbackSkipSeconds ?? 10;
+
+  let startSeconds = fallback;
+  let source: 'community' | 'fallback' = 'fallback';
+
+  // Check if a music_offtopic segment starts within the first 5 seconds
+  const introSegment = segments.find((s: any) => Array.isArray(s.segment) && s.segment[0] <= 5);
+  if (introSegment && introSegment.segment[1] > 0) {
+    startSeconds = Math.round(introSegment.segment[1]);
+    source = 'community';
+  }
+
+  // Check if a music_offtopic segment runs to the end of the video
+  let endSeconds: number | undefined = undefined;
+  const outroSegment = segments.find((s: any) => {
+    if (!Array.isArray(s.segment)) return false;
+    const [, end] = s.segment;
+    if (s.videoDuration && s.videoDuration > 0) {
+      return end >= s.videoDuration - 3;
+    }
+    return false;
+  });
+
+  if (outroSegment) {
+    endSeconds = Math.round(outroSegment.segment[0]);
+  }
+
+  res.json({
+    videoId,
+    startSeconds,
+    endSeconds,
+    source,
+  });
 });
 
 // === DJ ADMIN CONTROLS & AUTH ===
@@ -608,23 +914,47 @@ app.get('/api/state', (req, res) => {
   res.json(globalState);
 });
 
-// Verify PIN
+// Verify PIN: Read from DJ_PIN environment variable, at most 5 failed attempts per IP per minute, returns session token
 app.post('/api/admin/verify-pin', (req, res) => {
-  const { pin } = req.body;
-  if (pin === adminPin) {
-    return res.json({ success: true });
+  const ip = getClientIp(req);
+  const now = Date.now();
+  let attempt = pinAttemptMap.get(ip);
+  if (!attempt || now > attempt.resetAt) {
+    attempt = { count: 0, resetAt: now + 60 * 1000 };
+    pinAttemptMap.set(ip, attempt);
   }
+
+  if (attempt.count >= 5) {
+    const secondsLeft = Math.max(1, Math.ceil((attempt.resetAt - now) / 1000));
+    return res.status(429).json({ 
+      error: `Too many failed PIN attempts. Please wait ${secondsLeft}s before trying again.` 
+    });
+  }
+
+  if (!runtimeDjPin) {
+    console.error('DJ_PIN environment variable is not configured.');
+    return res.status(500).json({ error: 'DJ_PIN is not configured on the server environment.' });
+  }
+
+  const { pin } = req.body;
+  if (pin === runtimeDjPin) {
+    pinAttemptMap.delete(ip);
+    const token = crypto.randomUUID();
+    validDjTokens.add(token);
+    return res.json({ success: true, token });
+  }
+
+  attempt.count += 1;
   return res.status(401).json({ error: 'Incorrect DJ Passcode' });
 });
 
-// Update DJ Settings
-app.post('/api/admin/settings', (req, res) => {
-  const { pin, settings } = req.body;
-  if (pin && pin !== adminPin) {
-    return res.status(401).json({ error: 'Unauthorized: Invalid PIN' });
-  }
-
+// Update DJ Settings - DJ ONLY
+app.post(['/api/admin/settings', '/api/settings'], requireDj, (req, res) => {
+  const { settings } = req.body;
   if (settings && typeof settings === 'object') {
+    if (typeof settings.fallbackSkipSeconds === 'number') {
+      settings.fallbackSkipSeconds = Math.max(0, Math.min(60, Math.round(settings.fallbackSkipSeconds)));
+    }
     globalState.settings = {
       ...globalState.settings,
       ...settings,
@@ -635,51 +965,42 @@ app.post('/api/admin/settings', (req, res) => {
   res.status(400).json({ error: 'Invalid settings payload' });
 });
 
-// Toggle Lock/Unlock Requests (with alias /api/state/lock)
-app.post(['/api/admin/lock', '/api/state/lock'], (req, res) => {
+// Toggle Lock/Unlock Requests - DJ ONLY
+app.post(['/api/admin/lock', '/api/state/lock', '/api/queue/lock'], requireDj, (req, res) => {
   const { isLocked } = req.body;
   globalState.isLocked = !!isLocked;
   emitStateUpdate();
   res.json(globalState);
 });
 
-// DJ Live Stage Announcement (Ticker across /tv, /player, /request)
-app.post('/api/admin/announcement', (req, res) => {
-  const { pin, announcement } = req.body;
-  if (pin && pin !== adminPin) {
-    return res.status(401).json({ error: 'Unauthorized: Invalid PIN' });
-  }
+// DJ Live Stage Announcement - DJ ONLY
+app.post(['/api/admin/announcement', '/api/announcement'], requireDj, (req, res) => {
+  const { announcement } = req.body;
   globalState.announcement = announcement && typeof announcement === 'string' ? announcement.trim() : null;
   emitStateUpdate();
   res.json({ success: true, announcement: globalState.announcement });
 });
 
-// DJ Trigger Top 3 Party MVP Reveal Toggle
-app.post('/api/admin/mvp-reveal', (req, res) => {
-  const { pin, active } = req.body;
-  if (pin && pin !== adminPin) {
-    return res.status(401).json({ error: 'Unauthorized: Invalid PIN' });
-  }
+// DJ Trigger Top 3 Party MVP Reveal Toggle - DJ ONLY
+app.post('/api/admin/mvp-reveal', requireDj, (req, res) => {
+  const { active } = req.body;
   globalState.mvpRevealActive = typeof active === 'boolean' ? active : !globalState.mvpRevealActive;
   emitStateUpdate();
   res.json({ success: true, mvpRevealActive: globalState.mvpRevealActive });
 });
 
-// Change Admin PIN
-app.post('/api/admin/change-pin', (req, res) => {
-  const { oldPin, newPin } = req.body;
-  if (oldPin !== adminPin) {
-    return res.status(401).json({ error: 'Current PIN is incorrect' });
-  }
-  if (!newPin || newPin.length < 4) {
+// Change Admin PIN - DJ ONLY
+app.post('/api/admin/change-pin', requireDj, (req, res) => {
+  const { newPin } = req.body;
+  if (!newPin || String(newPin).trim().length < 4) {
     return res.status(400).json({ error: 'New PIN must be at least 4 digits' });
   }
-  adminPin = newPin;
+  runtimeDjPin = String(newPin).trim();
   res.json({ success: true, message: 'DJ PIN updated successfully' });
 });
 
-// Reset Queue (with alias /api/queue/reset)
-app.post(['/api/admin/reset', '/api/queue/reset'], (req, res) => {
+// Reset Queue - DJ ONLY
+app.post(['/api/admin/reset', '/api/queue/reset'], requireDj, (req, res) => {
   queue = [...initialQueue];
   playedHistory = [];
   clientLastRequestTime.clear();
@@ -691,41 +1012,28 @@ app.post(['/api/admin/reset', '/api/queue/reset'], (req, res) => {
   res.json({ success: true, count: queue.length });
 });
 
-// Clear played history to reset duplicate lockout
-app.delete('/api/admin/history', (req, res) => {
+// Clear played history to reset duplicate lockout - DJ ONLY
+app.delete(['/api/admin/history', '/api/history/clear'], requireDj, (req, res) => {
   playedHistory = [];
+  scheduleStateSave();
   res.json({ success: true, message: 'Played history cleared' });
 });
 
-// 9. 3-Tiered Search API (Tier 1: YouTube v3 API -> Tier 2: Invidious Instances -> Tier 3: Local curated + promptUrlPaste)
+// 9. Search API: Cached with 6-hr memory, quota daily tracking, remembers video metadata in Map
 app.get('/api/search', async (req, res) => {
   const { q } = req.query;
   const query = (q as string || '').trim().toLowerCase();
 
   const directId = extractYouTubeId(query);
   if (directId) {
-    const known = popularTracks.find(t => t.videoId === directId);
-    if (known) {
-      return res.json({
-        items: [{
-          id: { videoId: known.videoId },
-          snippet: {
-            title: known.title,
-            channelTitle: known.channelTitle,
-            thumbnails: { high: { url: known.thumbnail } }
-          }
-        }],
-        source: 'direct_id',
-        promptUrlPaste: false
-      });
-    }
+    const meta = await resolveSongMetadata(directId);
     return res.json({
       items: [{
         id: { videoId: directId },
         snippet: {
-          title: `YouTube Video (${directId})`,
-          channelTitle: 'YouTube / YouTube Music',
-          thumbnails: { high: { url: `https://i.ytimg.com/vi/${directId}/hqdefault.jpg` } }
+          title: meta.title,
+          channelTitle: meta.channelTitle,
+          thumbnails: { high: { url: meta.thumbnailUrl } }
         }
       }],
       source: 'direct_id',
@@ -733,26 +1041,49 @@ app.get('/api/search', async (req, res) => {
     });
   }
 
+  // Check 6-hour memory cache
+  const cached = searchCache.get(query);
+  const now = Date.now();
+  if (cached && (now - cached.timestamp) < SEARCH_CACHE_TTL) {
+    return res.json(cached.data);
+  }
+
   // --- TIER 1: Official YouTube Data API v3 ---
   const youtubeApiKey = process.env.YOUTUBE_API_KEY || process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
   if (youtubeApiKey && query) {
     try {
+      const today = new Date().toISOString().slice(0, 10);
+      if (today !== currentSearchDay) {
+        currentSearchDay = today;
+        youtubeSearchCountToday = 0;
+      }
+      youtubeSearchCountToday++;
+      console.log(`[YouTube API] Search call #${youtubeSearchCountToday} today for "${query}"`);
+
       const ytUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=8&q=${encodeURIComponent(query)}&key=${youtubeApiKey}`;
       const ytResponse = await fetch(ytUrl, { signal: AbortSignal.timeout(3500) });
       if (ytResponse.ok) {
         const ytData = await ytResponse.json();
         if (ytData.items && ytData.items.length > 0) {
-          const items = ytData.items.map((item: any) => ({
-            id: { videoId: item.id.videoId },
-            snippet: {
-              title: item.snippet.title,
-              channelTitle: item.snippet.channelTitle,
-              thumbnails: {
-                high: { url: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url }
+          const items = ytData.items.map((item: any) => {
+            const vId = item.id.videoId;
+            const title = item.snippet.title;
+            const channelTitle = item.snippet.channelTitle;
+            const thumbnailUrl = item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`;
+            // Remember metadata in Map for subsequent requests
+            rememberedMetadata.set(vId, { title, channelTitle, thumbnailUrl });
+            return {
+              id: { videoId: vId },
+              snippet: {
+                title,
+                channelTitle,
+                thumbnails: { high: { url: thumbnailUrl } }
               }
-            }
-          }));
-          return res.json({ items, source: 'youtube_v3', promptUrlPaste: false });
+            };
+          });
+          const responsePayload = { items, source: 'youtube_v3', promptUrlPaste: false };
+          searchCache.set(query, { data: responsePayload, timestamp: now });
+          return res.json(responsePayload);
         }
       } else {
         console.warn(`Tier 1 YouTube API responded with status ${ytResponse.status}`);
@@ -780,22 +1111,29 @@ app.get('/api/search', async (req, res) => {
             const items = invData
               .filter((d: any) => d.videoId)
               .slice(0, 8)
-              .map((d: any) => ({
-                id: { videoId: d.videoId },
-                snippet: {
-                  title: d.title,
-                  channelTitle: d.author || 'YouTube Artist',
-                  thumbnails: {
-                    high: { url: d.videoThumbnails?.[0]?.url || `https://i.ytimg.com/vi/${d.videoId}/hqdefault.jpg` }
+              .map((d: any) => {
+                const vId = d.videoId;
+                const title = d.title;
+                const channelTitle = d.author || 'YouTube Artist';
+                const thumbnailUrl = d.videoThumbnails?.[0]?.url || `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`;
+                rememberedMetadata.set(vId, { title, channelTitle, thumbnailUrl });
+                return {
+                  id: { videoId: vId },
+                  snippet: {
+                    title,
+                    channelTitle,
+                    thumbnails: { high: { url: thumbnailUrl } }
                   }
-                }
-              }));
+                };
+              });
             if (items.length > 0) {
-              return res.json({ items, source: 'invidious', promptUrlPaste: false });
+              const responsePayload = { items, source: 'invidious', promptUrlPaste: false };
+              searchCache.set(query, { data: responsePayload, timestamp: now });
+              return res.json(responsePayload);
             }
           }
         }
-      } catch (err) {
+      } catch {
         continue;
       }
     }
@@ -810,41 +1148,52 @@ app.get('/api/search', async (req, res) => {
 
   const fallbackList = matched.length > 0 ? matched : popularTracks.slice(0, 6);
 
-  const results = fallbackList.map(m => ({
-    id: { videoId: m.videoId },
-    snippet: {
+  const results = fallbackList.map(m => {
+    rememberedMetadata.set(m.videoId, {
       title: m.title,
       channelTitle: m.channelTitle,
-      thumbnails: { high: { url: m.thumbnail } }
-    }
-  }));
+      thumbnailUrl: m.thumbnail,
+    });
+    return {
+      id: { videoId: m.videoId },
+      snippet: {
+        title: m.title,
+        channelTitle: m.channelTitle,
+        thumbnails: { high: { url: m.thumbnail } }
+      }
+    };
+  });
 
-  return res.json({ 
+  const responsePayload = { 
     items: results, 
     source: 'local_catalog', 
     promptUrlPaste: true,
     message: 'Search is running low on capacity! For best results, copy and paste the exact YouTube / YouTube Music link above.'
-  });
+  };
+  searchCache.set(query, { data: responsePayload, timestamp: now });
+  return res.json(responsePayload);
 });
 
+// Socket connection
 io.on('connection', (socket) => {
   socket.emit('queue-updated', queue);
   socket.emit('state-updated', globalState);
   socket.emit('leaderboard-updated', computeLeaderboard());
 
-  // Real-time live emoji party reactions from guest phones
+  // Real-time live emoji reactions from guests
   socket.on('send-reaction', (data: { emoji: string; sender?: string }) => {
     io.emit('new-reaction', {
       id: crypto.randomUUID(),
       emoji: data.emoji || '🔥',
       sender: data.sender || 'Guest',
       timestamp: Date.now(),
-      xPos: Math.floor(Math.random() * 80) + 10 // randomized horizontal position percentage
     });
   });
 });
 
 async function startServer() {
+  loadPersistedState();
+
   const isProd = process.env.NODE_ENV === 'production';
   const port = process.env.PORT || 3000;
 
