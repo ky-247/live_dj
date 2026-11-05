@@ -1,6 +1,7 @@
 import React, { createElement, useState, useEffect, useRef, useCallback } from 'react';
 import YouTube from 'react-youtube';
-import { QueueItem } from '../types';
+import { QueueItem, DjSettings } from '../types';
+import { socket } from '../lib/socket';
 
 export interface SkipInfo {
   videoId: string;
@@ -15,6 +16,22 @@ interface UseCrossfadePlayerOptions {
   queue: QueueItem[];
 }
 
+const defaultSettings: DjSettings = {
+  guestCooldownSeconds: 180,
+  duplicateLockoutMinutes: 30,
+  maxQueueCapacity: 20,
+  maxRequestsPerGuest: 2,
+  maxUpvotesPerGuest: 10,
+  profanityFilterEnabled: true,
+  autoCleanupPlayed: false,
+  peakTimeFastMode: false,
+  vibeTagFilter: 'all',
+  fallbackSkipSeconds: 10,
+  allowGuestPlayback: true,
+  maxGuestTrackDurationSeconds: 240,
+  masterToRequestSwitchDelaySeconds: 10,
+};
+
 export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfadePlayerOptions) {
   const [currentTrack, setCurrentTrack] = useState<QueueItem | null>(null);
   const [upcomingTrack, setUpcomingTrack] = useState<QueueItem | null>(null);
@@ -23,12 +40,14 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState<boolean>(false);
   const [skipInfoLabel, setSkipInfoLabel] = useState<string | null>(null);
+  const [switchNoticeLabel, setSwitchNoticeLabel] = useState<string | null>(null);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [activePlayer, setActivePlayer] = useState<'A' | 'B'>('A');
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
+  const [settings, setSettings] = useState<DjSettings>(defaultSettings);
 
-  // Player references and readiness
+  // References and readiness
   const playerARef = useRef<any>(null);
   const playerBRef = useRef<any>(null);
   const playerAState = useRef<number>(-1);
@@ -36,15 +55,41 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
   const isReadyA = useRef<boolean>(false);
   const isReadyB = useRef<boolean>(false);
 
-  // Crossfade and session trackers
+  // Crossfade, session, and master switch trackers
   const isCrossfadingRef = useRef<boolean>(false);
   const isFirstSessionTrackRef = useRef<boolean>(true);
   const activeSkipInfoRef = useRef<SkipInfo | null>(null);
   const upcomingSkipInfoRef = useRef<SkipInfo | null>(null);
+  const masterSwitchStartTimeRef = useRef<number | null>(null);
+  const settingsRef = useRef<DjSettings>(defaultSettings);
+  settingsRef.current = settings;
 
   // Active fade intervals
   const fadeIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Synchronize settings with server
+  useEffect(() => {
+    const handleStateUpdated = (data: any) => {
+      if (data?.settings) {
+        setSettings((prev) => ({ ...prev, ...data.settings }));
+      }
+    };
+
+    socket.on('state-updated', handleStateUpdated);
+    fetch('/api/state')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.settings) {
+          setSettings((prev) => ({ ...prev, ...data.settings }));
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      socket.off('state-updated', handleStateUpdated);
+    };
+  }, []);
 
   const getTargetVolume = useCallback(() => (isMuted ? 0 : volume), [isMuted, volume]);
 
@@ -90,6 +135,21 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     return res;
   }, [token, onUnauthorized]);
 
+  // Update skip info label
+  const updateSkipLabel = useCallback((info: SkipInfo | null) => {
+    if (!info) {
+      setSkipInfoLabel(null);
+      return;
+    }
+    if (info.source === 'community') {
+      setSkipInfoLabel('Intro skipped (community)');
+    } else if (info.startSeconds > 0) {
+      setSkipInfoLabel(`Intro skipped (${info.startSeconds} s)`);
+    } else {
+      setSkipInfoLabel(null);
+    }
+  }, []);
+
   // Preload upcoming track into idle player
   const preloadUpcoming = useCallback(async () => {
     if (!token) return;
@@ -123,29 +183,79 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     }
   }, [token, authFetch, fetchSkipInfo, getIdleInstance]);
 
-  // Update skip info label
-  const updateSkipLabel = (info: SkipInfo | null) => {
-    if (!info) {
-      setSkipInfoLabel(null);
-      return;
+  // Load and play a specific track on the active player with precision
+  const playTrackInstance = useCallback(async (track: QueueItem, fadeIn: boolean = false) => {
+    clearFades();
+    isCrossfadingRef.current = false;
+    masterSwitchStartTimeRef.current = null;
+    setSwitchNoticeLabel(null);
+    setCurrentTrack(track);
+    setIsPlaying(true);
+    setErrorNotice(null);
+
+    const skipInfo = await fetchSkipInfo(track.youtube_id);
+    activeSkipInfoRef.current = skipInfo;
+    updateSkipLabel(skipInfo);
+
+    const activeInst = getActiveInstance();
+    if (activeInst) {
+      const targetVol = getTargetVolume();
+
+      if (fadeIn) {
+        activeInst.setVolume(0);
+        activeInst.unMute();
+        const playPromise = activeInst.loadVideoById({
+          videoId: track.youtube_id,
+          startSeconds: skipInfo.startSeconds,
+          endSeconds: skipInfo.endSeconds,
+        });
+        if (playPromise !== undefined) {
+          Promise.resolve(playPromise).catch(() => setAutoplayBlocked(true));
+        }
+
+        let step = 0;
+        const totalSteps = 30; // 3 seconds at 100ms
+        fadeIntervalRef.current = setInterval(() => {
+          step++;
+          const currentVol = Math.round((step / totalSteps) * targetVol);
+          try {
+            activeInst.setVolume(currentVol);
+          } catch {}
+          if (step >= totalSteps) {
+            clearFades();
+            activeInst.setVolume(targetVol);
+          }
+        }, 100);
+      } else {
+        activeInst.setVolume(targetVol);
+        activeInst.unMute();
+        const playPromise = activeInst.loadVideoById({
+          videoId: track.youtube_id,
+          startSeconds: skipInfo.startSeconds,
+          endSeconds: skipInfo.endSeconds,
+        });
+        if (playPromise !== undefined) {
+          Promise.resolve(playPromise).catch(() => setAutoplayBlocked(true));
+        }
+      }
     }
-    if (info.source === 'community') {
-      setSkipInfoLabel('Intro skipped (community)');
-    } else if (info.startSeconds > 0) {
-      setSkipInfoLabel(`Intro skipped (${info.startSeconds} s)`);
-    } else {
-      setSkipInfoLabel(null);
-    }
-  };
+
+    setTimeout(() => preloadUpcoming(), 1000);
+  }, [clearFades, fetchSkipInfo, updateSkipLabel, getActiveInstance, getTargetVolume, preloadUpcoming]);
 
   // Advance to next song via server-authoritative /api/player/advance
-  const advanceTrack = useCallback(async () => {
+  const advanceTrack = useCallback(async (targetTrackId?: string) => {
     if (!token) return;
     clearFades();
     isCrossfadingRef.current = false;
+    masterSwitchStartTimeRef.current = null;
+    setSwitchNoticeLabel(null);
 
     try {
-      const res = await authFetch('/api/player/advance', { method: 'POST' });
+      const res = await authFetch('/api/player/advance', {
+        method: 'POST',
+        body: JSON.stringify(targetTrackId ? { targetTrackId } : {}),
+      });
       if (!res.ok) return;
       const data = await res.json();
       const track: QueueItem | null = data.track;
@@ -154,73 +264,45 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
         setCurrentTrack(null);
         setIsPlaying(false);
         setSkipInfoLabel(null);
+        setSwitchNoticeLabel(null);
         setErrorNotice(null);
         const activeInst = getActiveInstance();
         if (activeInst) activeInst.stopVideo();
         return;
       }
 
-      setCurrentTrack(track);
-      setIsPlaying(true);
-      setErrorNotice(null);
-
-      // Fetch skip info
-      const skipInfo = await fetchSkipInfo(track.youtube_id);
-      activeSkipInfoRef.current = skipInfo;
-      updateSkipLabel(skipInfo);
-
-      const activeInst = getActiveInstance();
-      if (activeInst) {
-        const targetVol = getTargetVolume();
-
-        if (isFirstSessionTrackRef.current) {
-          // The very first song of a session fades in over 3 seconds
-          isFirstSessionTrackRef.current = false;
-          activeInst.setVolume(0);
-          activeInst.unMute();
-          const playPromise = activeInst.loadVideoById({
-            videoId: track.youtube_id,
-            startSeconds: skipInfo.startSeconds,
-            endSeconds: skipInfo.endSeconds,
-          });
-          if (playPromise !== undefined) {
-            Promise.resolve(playPromise).catch(() => setAutoplayBlocked(true));
-          }
-
-          // 3-second fade in (30 steps of 100ms)
-          let step = 0;
-          const totalSteps = 30;
-          fadeIntervalRef.current = setInterval(() => {
-            step++;
-            const currentVol = Math.round((step / totalSteps) * targetVol);
-            try {
-              activeInst.setVolume(currentVol);
-            } catch {}
-            if (step >= totalSteps) {
-              clearFades();
-              activeInst.setVolume(targetVol);
-            }
-          }, 100);
-        } else {
-          activeInst.setVolume(targetVol);
-          activeInst.unMute();
-          const playPromise = activeInst.loadVideoById({
-            videoId: track.youtube_id,
-            startSeconds: skipInfo.startSeconds,
-            endSeconds: skipInfo.endSeconds,
-          });
-          if (playPromise !== undefined) {
-            Promise.resolve(playPromise).catch(() => setAutoplayBlocked(true));
-          }
-        }
-      }
-
-      // Preload next track into idle player
-      setTimeout(() => preloadUpcoming(), 1000);
+      const isFirst = isFirstSessionTrackRef.current;
+      isFirstSessionTrackRef.current = false;
+      await playTrackInstance(track, isFirst);
     } catch (err) {
       console.error('Failed to advance track:', err);
     }
-  }, [token, authFetch, fetchSkipInfo, getActiveInstance, getTargetVolume, clearFades, preloadUpcoming]);
+  }, [token, clearFades, authFetch, getActiveInstance, playTrackInstance]);
+
+  // Synchronize immediately whenever server broadcasts track-playing-changed
+  useEffect(() => {
+    const handleTrackPlayingChanged = (data: { track: QueueItem | null }) => {
+      const serverTrack = data?.track;
+      if (!serverTrack) {
+        if (currentTrack) {
+          setCurrentTrack(null);
+          setIsPlaying(false);
+          setSkipInfoLabel(null);
+          setSwitchNoticeLabel(null);
+          getActiveInstance()?.stopVideo();
+        }
+        return;
+      }
+      if (serverTrack.id !== currentTrack?.id) {
+        playTrackInstance(serverTrack, false);
+      }
+    };
+
+    socket.on('track-playing-changed', handleTrackPlayingChanged);
+    return () => {
+      socket.off('track-playing-changed', handleTrackPlayingChanged);
+    };
+  }, [currentTrack, playTrackInstance, getActiveInstance]);
 
   // Execute crossfade transition between Active and Idle players
   const startCrossfade = useCallback(() => {
@@ -228,13 +310,14 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     const activeInst = getActiveInstance();
     const idleInst = getIdleInstance();
     if (!activeInst || !idleInst || !upcomingTrack) {
-      // Fallback: advance directly if idle is not ready
       advanceTrack();
       return;
     }
 
     isCrossfadingRef.current = true;
     clearFades();
+    masterSwitchStartTimeRef.current = null;
+    setSwitchNoticeLabel(null);
 
     const targetVol = getTargetVolume();
     idleInst.setVolume(0);
@@ -259,29 +342,29 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
             activeInst.stopVideo();
           } catch {}
 
-          // Switch active and idle player
           const newActive = activePlayer === 'A' ? 'B' : 'A';
+          const preloaded = upcomingTrack;
           setActivePlayer(newActive);
-          setCurrentTrack(upcomingTrack);
+          setCurrentTrack(preloaded);
           activeSkipInfoRef.current = upcomingSkipInfoRef.current;
           updateSkipLabel(upcomingSkipInfoRef.current);
           upcomingSkipInfoRef.current = null;
           isCrossfadingRef.current = false;
 
-          // Call server /api/player/advance to keep state synchronized
-          authFetch('/api/player/advance', { method: 'POST' }).then(() => {
+          authFetch('/api/player/advance', {
+            method: 'POST',
+            body: JSON.stringify({ targetTrackId: preloaded.id }),
+          }).then(() => {
             preloadUpcoming();
           });
         }
       }, 100);
     };
 
-    // Start idle player and begin fade ramp once playing
     try {
       idleInst.playVideo();
     } catch {}
 
-    // Check when idle starts reporting PLAYING (state 1)
     let checkAttempts = 0;
     const checkPlaying = setInterval(() => {
       checkAttempts++;
@@ -291,11 +374,13 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
         startFadeRamp();
       }
     }, 100);
-  }, [activePlayer, getActiveInstance, getIdleInstance, upcomingTrack, getTargetVolume, clearFades, advanceTrack, authFetch, preloadUpcoming]);
+  }, [activePlayer, getActiveInstance, getIdleInstance, upcomingTrack, getTargetVolume, clearFades, advanceTrack, authFetch, updateSkipLabel, preloadUpcoming]);
 
-  // User manual skip or DJ "next": 2-second fade instead of cutting
+  // User manual skip or auto skip (2-second fade)
   const handleSkip = useCallback(() => {
     clearFades();
+    masterSwitchStartTimeRef.current = null;
+    setSwitchNoticeLabel(null);
     const activeInst = getActiveInstance();
     const targetVol = getTargetVolume();
 
@@ -320,7 +405,7 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     }, 100);
   }, [clearFades, getActiveInstance, getTargetVolume, isPlaying, advanceTrack]);
 
-  // Every 250ms: Check active playback time and trigger 6s crossfade
+  // Every 250ms: Check active playback time, max duration rule, switch delay, and 6s end crossfade
   useEffect(() => {
     timeCheckIntervalRef.current = setInterval(() => {
       const activeInst = getActiveInstance();
@@ -334,10 +419,50 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
 
         if (!isPlaying || isCrossfadingRef.current) return;
 
+        const currentSettings = settingsRef.current;
+        const isMaster = !!currentTrack?.is_master_list;
+        const maxGuestSec = currentSettings.maxGuestTrackDurationSeconds ?? 240;
+
+        // RULE 3: Max play duration limit applies ONLY to guest requests (!isMaster)
+        // Master list songs can be 1+ hours and will NOT be cut off by max guest duration limit!
+        if (!isMaster && maxGuestSec > 0 && curTime >= maxGuestSec && curTime > 0) {
+          console.log(`Max guest request duration of ${maxGuestSec}s reached. Advancing track...`);
+          handleSkip();
+          return;
+        }
+
+        // RULE 4: Master List to Guest Request Switch Delay
+        if (isMaster && currentSettings.allowGuestPlayback !== false) {
+          const hasPendingGuest = queue.some((q) => q.status === 'pending' && !q.is_master_list);
+          if (hasPendingGuest) {
+            if (!masterSwitchStartTimeRef.current) {
+              masterSwitchStartTimeRef.current = Date.now();
+            }
+            const delaySec = currentSettings.masterToRequestSwitchDelaySeconds ?? 10;
+            const elapsedSec = (Date.now() - masterSwitchStartTimeRef.current) / 1000;
+            const remaining = Math.max(0, Math.ceil(delaySec - elapsedSec));
+
+            setSwitchNoticeLabel(`Guest request queued • Switching in ${remaining}s`);
+
+            if (elapsedSec >= delaySec) {
+              masterSwitchStartTimeRef.current = null;
+              setSwitchNoticeLabel(null);
+              handleSkip();
+              return;
+            }
+          } else {
+            masterSwitchStartTimeRef.current = null;
+            setSwitchNoticeLabel(null);
+          }
+        } else {
+          masterSwitchStartTimeRef.current = null;
+          setSwitchNoticeLabel(null);
+        }
+
+        // Standard 6s natural track end crossfade
         const effectiveEnd = activeSkipInfoRef.current?.endSeconds || dur;
         if (effectiveEnd && effectiveEnd > 0 && curTime > 0) {
           const timeLeft = effectiveEnd - curTime;
-          // With 6 seconds left, start crossfade
           if (timeLeft <= 6.2 && timeLeft > 0) {
             startCrossfade();
           }
@@ -351,7 +476,7 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
         timeCheckIntervalRef.current = null;
       }
     };
-  }, [isPlaying, getActiveInstance, startCrossfade]);
+  }, [isPlaying, currentTrack, queue, getActiveInstance, startCrossfade, handleSkip]);
 
   // Handle Play / Pause Toggle
   const togglePlayPause = useCallback(() => {
@@ -381,13 +506,13 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     }
   }, [getActiveInstance]);
 
-  // Handle Mute Toggle
+  // Toggle Mute
   const toggleMute = useCallback(() => {
-    const nextMuted = !isMuted;
-    setIsMuted(nextMuted);
+    const nextMute = !isMuted;
+    setIsMuted(nextMute);
     const activeInst = getActiveInstance();
     if (activeInst) {
-      if (nextMuted) {
+      if (nextMute) {
         activeInst.mute();
       } else {
         activeInst.unMute();
@@ -396,7 +521,7 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     }
   }, [isMuted, volume, getActiveInstance]);
 
-  // Audio unlock for autoplay restrictions
+  // Audio Unlock Handler for autoplay blocked
   const unlockAudio = useCallback(() => {
     setAutoplayBlocked(false);
     const activeInst = getActiveInstance();
@@ -408,25 +533,16 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     }
   }, [getActiveInstance, volume]);
 
-  // Error code 101/150: Skip immediately
-  const handlePlayerError = useCallback((errorCode: number, playerKey: 'A' | 'B') => {
-    console.warn(`YouTube player ${playerKey} error code:`, errorCode);
-    if (errorCode === 101 || errorCode === 150) {
-      setErrorNotice('Embedding blocked by video owner (code 101/150). Skipping to next track immediately...');
-      advanceTrack();
-    } else {
-      setErrorNotice(`Playback error (code ${errorCode}). Skipping to next track...`);
-      advanceTrack();
+  // Handle Player Errors (Auto-skip unplayable/copyright-blocked videos)
+  const handlePlayerError = useCallback((errCode: number, playerTag: 'A' | 'B') => {
+    console.warn(`YouTube Player ${playerTag} error:`, errCode);
+    if ([2, 5, 100, 101, 150].includes(errCode)) {
+      setErrorNotice('This video cannot be embedded. Auto-skipping to next song...');
+      setTimeout(() => {
+        advanceTrack();
+      }, 1500);
     }
   }, [advanceTrack]);
-
-  // Sync with queue when active song changes
-  useEffect(() => {
-    const currentFromQueue = queue.find((q) => q.status === 'playing');
-    if (currentFromQueue && (!currentTrack || currentTrack.id !== currentFromQueue.id)) {
-      setCurrentTrack(currentFromQueue);
-    }
-  }, [queue, currentTrack]);
 
   // Hidden YouTube Player Configuration
   const ytOpts = {
@@ -462,7 +578,7 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
           if (activePlayer === 'A') {
             if (e.data === 1) setIsPlaying(true);
             if (e.data === 2) setIsPlaying(false);
-            if (e.data === 0) advanceTrack();
+            if (e.data === 0 && !isCrossfadingRef.current) advanceTrack();
           }
         },
         onError: (e: any) => handlePlayerError(e?.data, 'A'),
@@ -479,7 +595,7 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
           if (activePlayer === 'B') {
             if (e.data === 1) setIsPlaying(true);
             if (e.data === 2) setIsPlaying(false);
-            if (e.data === 0) advanceTrack();
+            if (e.data === 0 && !isCrossfadingRef.current) advanceTrack();
           }
         },
         onError: (e: any) => handlePlayerError(e?.data, 'B'),
@@ -495,6 +611,7 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     isMuted,
     autoplayBlocked,
     skipInfoLabel,
+    switchNoticeLabel,
     errorNotice,
     togglePlayPause,
     handleSkip,
@@ -502,9 +619,11 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     toggleMute,
     unlockAudio,
     advanceTrack,
+    playTrack: playTrackInstance,
     renderPlayers,
     currentTime,
     duration,
+    settings,
     seekTo: (seconds: number) => {
       const activeInst = getActiveInstance();
       if (activeInst?.seekTo) {

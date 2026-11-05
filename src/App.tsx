@@ -26,6 +26,9 @@ const defaultState: GlobalState = {
     autoCleanupPlayed: false,
     peakTimeFastMode: false,
     fallbackSkipSeconds: 10,
+    allowGuestPlayback: true,
+    maxGuestTrackDurationSeconds: 240,
+    masterToRequestSwitchDelaySeconds: 10,
   },
 };
 

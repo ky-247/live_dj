@@ -63,6 +63,7 @@ export function PlayerPage() {
     isMuted,
     autoplayBlocked,
     skipInfoLabel,
+    switchNoticeLabel,
     errorNotice,
     togglePlayPause,
     handleSkip,
@@ -70,6 +71,7 @@ export function PlayerPage() {
     toggleMute,
     unlockAudio,
     advanceTrack,
+    playTrack,
     renderPlayers,
     currentTime,
     duration,
@@ -125,9 +127,14 @@ export function PlayerPage() {
   // Start initial track if authenticated and nothing is playing
   useEffect(() => {
     if (isAuthenticated && djToken && !currentTrack && queue.length > 0) {
-      advanceTrack();
+      const alreadyPlaying = queue.find(q => q.status === 'playing');
+      if (alreadyPlaying) {
+        playTrack(alreadyPlaying);
+      } else {
+        advanceTrack();
+      }
     }
-  }, [isAuthenticated, djToken, currentTrack, queue.length, advanceTrack]);
+  }, [isAuthenticated, djToken, currentTrack, queue, advanceTrack, playTrack]);
 
   // Server-side PIN verification
   const verifyPinOnServer = async (pin: string) => {
@@ -337,6 +344,11 @@ export function PlayerPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {switchNoticeLabel && (
+              <span className="font-mono text-[11px] uppercase tracking-wider px-2 py-0.5 rounded-sm bg-[#dfed66] text-[#191c18] font-bold animate-pulse">
+                {switchNoticeLabel}
+              </span>
+            )}
             {skipInfoLabel && (
               <span className="font-mono text-[11px] uppercase tracking-wider px-2 py-0.5 rounded-sm bg-[#22251f] border border-[#dfed66]/50 text-[#dfed66]">
                 {skipInfoLabel}
@@ -471,14 +483,35 @@ export function PlayerPage() {
               <p className="text-xs text-[#aeb3a5] max-w-sm mx-auto">
                 The stage player is standing by. When songs are submitted by guests or queued in the booth, they will begin streaming automatically.
               </p>
-              {upcomingTracks.length > 0 && (
+              {upcomingTracks.length > 0 ? (
                 <button
-                  onClick={advanceTrack}
+                  onClick={() => advanceTrack()}
                   className="mt-2 px-4 py-2 rounded-sm bg-[#dfed66] hover:bg-[#d2e057] text-[#191c18] font-mono text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
                 >
                   Start First Track
                 </button>
-              )}
+              ) : queue.filter(q => q.status === 'played').length > 0 ? (
+                <button
+                  onClick={async () => {
+                    const res = await fetch('/api/queue/restart-playlist', {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${djToken || ''}`,
+                        'Content-Type': 'application/json',
+                      },
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      if (data.currentTrack) {
+                        playTrack(data.currentTrack);
+                      }
+                    }
+                  }}
+                  className="mt-2 px-4 py-2 rounded-sm bg-[#dfed66] hover:bg-[#d2e057] text-[#191c18] font-mono text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Restart Playlist ({queue.filter(q => q.status === 'played').length} Songs from History)
+                </button>
+              ) : null}
             </div>
           )}
         </div>

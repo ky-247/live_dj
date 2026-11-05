@@ -27,6 +27,9 @@ export interface DjSettings {
   peakTimeFastMode: boolean;
   vibeTagFilter?: string;
   fallbackSkipSeconds: number;
+  allowGuestPlayback: boolean; // Controls whether guest requested list is played or only master list
+  maxGuestTrackDurationSeconds: number; // Max seconds a guest request can play before advancing (0 = no limit; does NOT apply to master list)
+  masterToRequestSwitchDelaySeconds: number; // Delay in seconds before switching from master track to newly arrived guest request
 }
 
 export interface PartyContributor {

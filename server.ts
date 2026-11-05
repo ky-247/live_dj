@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -7,9 +6,12 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import cookieParser from 'cookie-parser';
+import dotenv from 'dotenv';
 import { sortQueue } from './src/lib/queue';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: join(__dirname, '.env'), override: true });
+dotenv.config({ override: true });
 
 const app = express();
 const httpServer = createServer(app);
@@ -67,6 +69,9 @@ interface DjSettings {
   peakTimeFastMode: boolean;
   vibeTagFilter?: string;
   fallbackSkipSeconds: number;
+  allowGuestPlayback?: boolean;
+  maxGuestTrackDurationSeconds?: number;
+  masterToRequestSwitchDelaySeconds?: number;
 }
 
 interface PlayedHistoryEntry {
@@ -223,7 +228,7 @@ let queue: QueueTrack[] = [...initialQueue];
 let playedHistory: PlayedHistoryEntry[] = [];
 
 // Server-side DJ Auth & Token Storage
-let runtimeDjPin: string | undefined = process.env.DJ_PIN;
+let runtimeDjPin: string | undefined = process.env.DJ_PIN ? String(process.env.DJ_PIN).trim().replace(/^["']|["']$/g, '') : undefined;
 const validDjTokens = new Set<string>();
 
 // Rate-limiting for failed PIN attempts (at most 5 wrong attempts per IP per minute)
@@ -277,12 +282,16 @@ let globalState = {
     peakTimeFastMode: false,
     vibeTagFilter: 'all',
     fallbackSkipSeconds: 10,
+    allowGuestPlayback: true,
+    maxGuestTrackDurationSeconds: 240,
+    masterToRequestSwitchDelaySeconds: 10,
   } as DjSettings
 };
 
 // Persistence state directory and debounce
 const DATA_DIR = join(__dirname, 'data');
 const STATE_FILE = join(DATA_DIR, 'state.json');
+const MASTERLIST_FILE = join(DATA_DIR, 'masterlist.json');
 
 let saveTimeout: NodeJS.Timeout | null = null;
 function scheduleStateSave() {
@@ -299,6 +308,10 @@ function scheduleStateSave() {
         globalState,
       };
       writeFileSync(STATE_FILE, JSON.stringify(stateToSave, null, 2), 'utf-8');
+
+      // Save custom master list tracks so they persist across redeploys
+      const masterTracks = queue.filter(q => q.is_master_list);
+      writeFileSync(MASTERLIST_FILE, JSON.stringify(masterTracks, null, 2), 'utf-8');
     } catch (err) {
       console.error('Failed to save state to data/state.json:', err);
     }
@@ -327,6 +340,19 @@ function loadPersistedState() {
         };
       }
       console.log(`Loaded persisted state: ${queue.length} tracks in queue, ${playedHistory.length} in history.`);
+    }
+
+    // Also check masterlist.json to preserve any DJ added masterlist songs across redeploys
+    if (existsSync(MASTERLIST_FILE)) {
+      const masterContent = readFileSync(MASTERLIST_FILE, 'utf-8');
+      const savedMasterTracks: QueueTrack[] = JSON.parse(masterContent);
+      if (Array.isArray(savedMasterTracks)) {
+        savedMasterTracks.forEach((t) => {
+          if (!queue.some((q) => q.id === t.id || q.youtube_id === t.youtube_id)) {
+            queue.push(t);
+          }
+        });
+      }
     }
   } catch (err) {
     console.warn('Could not load data/state.json, starting with default queue:', err);
@@ -749,10 +775,25 @@ app.put('/api/queue/:id/status', requireDj, (req, res) => {
   const entry = queue.find(q => q.id === id);
 
   if (entry) {
-    entry.status = status;
     if (status === 'playing') {
+      const now = Date.now();
+      // Ensure all other tracks marked 'playing' are transitioned to 'played'
+      queue.forEach(q => {
+        if (q.id !== id && q.status === 'playing') {
+          q.status = 'played';
+          q.played_at = new Date().toISOString();
+          playedHistory.push({
+            youtube_id: q.youtube_id,
+            title: q.title,
+            played_at: now,
+          });
+        }
+      });
+      entry.status = 'playing';
       globalState.nowPlayingTrackId = id;
+      io.emit('track-playing-changed', { track: entry });
     } else if (status === 'played') {
+      entry.status = 'played';
       entry.played_at = new Date().toISOString();
       playedHistory.push({
         youtube_id: entry.youtube_id,
@@ -768,7 +809,10 @@ app.put('/api/queue/:id/status', requireDj, (req, res) => {
       if (globalState.settings.autoCleanupPlayed) {
         queue = queue.filter(q => q.id !== id);
       }
+    } else {
+      entry.status = status;
     }
+    scheduleStateSave();
     emitQueueUpdate();
     emitStateUpdate();
     res.json(entry);
@@ -824,9 +868,11 @@ app.get('/api/leaderboard', (req, res) => {
 
 // === SERVER-AUTHORITATIVE TRACK ADVANCE & PRELOAD ===
 
-// POST /api/player/advance (DJ only): Marks current track played, picks next using sortQueue, marks it playing, and returns it
+// POST /api/player/advance (DJ only): Marks current track played, picks next using sortQueue or targetTrackId, marks it playing, and returns it
 app.post('/api/player/advance', requireDj, (req, res) => {
   const now = Date.now();
+  const { targetTrackId } = req.body || {};
+
   if (globalState.nowPlayingTrackId) {
     const current = queue.find(q => q.id === globalState.nowPlayingTrackId);
     if (current && current.status === 'playing') {
@@ -846,25 +892,212 @@ app.post('/api/player/advance', requireDj, (req, res) => {
     }
   }
 
-  const pending = sortQueue(queue, true);
-  if (pending.length > 0) {
-    const nextTrack = pending[0];
+  // If a specific targetTrackId is requested (e.g. from seamless crossfade preload), use it if valid
+  let nextTrack: QueueTrack | undefined;
+  if (targetTrackId) {
+    nextTrack = queue.find(q => q.id === targetTrackId && q.status === 'pending');
+  }
+
+  const allowGuest = globalState.settings.allowGuestPlayback !== false;
+
+  if (!nextTrack) {
+    const pending = sortQueue(queue, true, allowGuest);
+    if (pending.length > 0) {
+      nextTrack = pending[0];
+    }
+  }
+
+  if (nextTrack) {
     nextTrack.status = 'playing';
     globalState.nowPlayingTrackId = nextTrack.id;
+    io.emit('track-playing-changed', { track: nextTrack });
+    scheduleStateSave();
     emitQueueUpdate();
     emitStateUpdate();
     return res.json({ track: nextTrack });
   }
 
   globalState.nowPlayingTrackId = null;
+  io.emit('track-playing-changed', { track: null });
+  scheduleStateSave();
   emitQueueUpdate();
   emitStateUpdate();
   res.json({ track: null });
 });
 
+// POST /api/queue/play-item (DJ only): Immediately play any song (from Running Order, Played History, Master List, etc.)
+app.post('/api/queue/play-item', requireDj, (req, res) => {
+  const { trackId, track: clientTrack } = req.body || {};
+  const now = Date.now();
+
+  let target = queue.find(q => q.id === trackId || (clientTrack && q.id === clientTrack.id));
+  if (!target && clientTrack && clientTrack.youtube_id) {
+    target = queue.find(q => q.youtube_id === clientTrack.youtube_id);
+  }
+
+  // If not found in live queue, reconstruct/re-add from client track or playedHistory
+  if (!target && clientTrack && clientTrack.youtube_id) {
+    target = {
+      id: clientTrack.id || `replayed-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      created_at: new Date().toISOString(),
+      youtube_id: clientTrack.youtube_id,
+      title: clientTrack.title || 'Replayed Track',
+      channel_title: clientTrack.channel_title || 'Replay',
+      thumbnail_url: clientTrack.thumbnail_url || `https://i.ytimg.com/vi/${clientTrack.youtube_id}/hqdefault.jpg`,
+      requested_by: clientTrack.requested_by || 'DJ Replay',
+      upvotes: clientTrack.upvotes || 1,
+      is_master_list: !!clientTrack.is_master_list,
+      status: 'pending',
+    };
+    queue.push(target);
+  }
+
+  if (target) {
+    // Mark previous playing track as played
+    queue.forEach(q => {
+      if (q.id !== target!.id && q.status === 'playing') {
+        q.status = 'played';
+        q.played_at = new Date().toISOString();
+        playedHistory.push({
+          youtube_id: q.youtube_id,
+          title: q.title,
+          played_at: now,
+        });
+      }
+    });
+
+    target.status = 'playing';
+    target.played_at = undefined;
+    globalState.nowPlayingTrackId = target.id;
+    scheduleStateSave();
+    emitQueueUpdate();
+    emitStateUpdate();
+    io.emit('track-playing-changed', { track: target });
+    return res.json({ success: true, track: target });
+  }
+
+  return res.status(404).json({ error: 'Track not found to play' });
+});
+
+// POST /api/admin/masterlist (DJ only): Add a song to the master list (persisted across restarts and redeploys)
+app.post(['/api/admin/masterlist', '/api/masterlist'], requireDj, async (req, res) => {
+  const { query, youtube_id, title, channel_title, thumbnail_url } = req.body || {};
+  let yId = youtube_id;
+  let tTitle = title;
+  let cTitle = channel_title;
+  let tThumb = thumbnail_url;
+
+  if (!yId && query) {
+    const searchQ = String(query).trim();
+    const extracted = extractYouTubeId(searchQ);
+    if (extracted) {
+      yId = extracted;
+    }
+  }
+
+  if (yId && (!tTitle || !tThumb)) {
+    const meta = await resolveSongMetadata(yId);
+    tTitle = tTitle || meta.title;
+    cTitle = cTitle || meta.channelTitle;
+    tThumb = tThumb || meta.thumbnailUrl;
+  }
+
+  if (!yId || !tTitle) {
+    return res.status(400).json({ error: 'Valid YouTube URL, Video ID, or Song Title is required.' });
+  }
+
+  const newMasterTrack: QueueTrack = {
+    id: `master-custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    created_at: new Date().toISOString(),
+    youtube_id: yId,
+    title: tTitle,
+    channel_title: cTitle || 'Master Catalog',
+    thumbnail_url: tThumb || `https://i.ytimg.com/vi/${yId}/hqdefault.jpg`,
+    requested_by: 'Host / Master Playlist',
+    upvotes: 0,
+    is_master_list: true,
+    status: 'pending',
+  };
+
+  queue.push(newMasterTrack);
+  scheduleStateSave();
+  emitQueueUpdate();
+  emitStateUpdate();
+
+  res.json({ success: true, track: newMasterTrack, message: 'Song added to Master List and persisted across redeploys!' });
+});
+
+// POST /api/queue/restart-playlist (DJ only): Restarts playlist from played history (includes both masterlist and requested songs)
+app.post('/api/queue/restart-playlist', requireDj, (req, res) => {
+  const restartedTracks: QueueTrack[] = [];
+
+  // 1. Reset all tracks currently in queue that have status 'played'
+  queue.forEach(t => {
+    if (t.status === 'played') {
+      t.status = 'pending';
+      t.played_at = undefined;
+      restartedTracks.push(t);
+    }
+  });
+
+  // 2. If queue was emptied or lacks played tracks, recreate from playedHistory or initial master list
+  if (restartedTracks.length === 0 && queue.filter(q => q.status === 'pending').length === 0) {
+    if (playedHistory.length > 0) {
+      const recreated: QueueTrack[] = playedHistory.map((item, idx) => ({
+        id: `restarted-${idx}-${Date.now()}`,
+        created_at: new Date().toISOString(),
+        youtube_id: item.youtube_id,
+        title: item.title,
+        channel_title: 'DesiBeats Replay',
+        thumbnail_url: `https://i.ytimg.com/vi/${item.youtube_id}/hqdefault.jpg`,
+        requested_by: 'Party Replay',
+        upvotes: 1,
+        is_master_list: true,
+        status: 'pending' as const,
+      }));
+      queue.push(...recreated);
+      restartedTracks.push(...recreated);
+    } else {
+      // Re-seed original catalog
+      queue = [...initialQueue];
+      restartedTracks.push(...queue);
+    }
+  }
+
+  // 3. Clear duplicate lockout history for fresh setlist rotation
+  playedHistory = [];
+
+  // 4. If nothing is currently playing, start the first track in the restarted queue immediately
+  let nowPlayingTrack: QueueTrack | null = null;
+  const allowGuest = globalState.settings.allowGuestPlayback !== false;
+  const pending = sortQueue(queue, true, allowGuest);
+  if (pending.length > 0 && !globalState.nowPlayingTrackId) {
+    const first = pending[0];
+    first.status = 'playing';
+    globalState.nowPlayingTrackId = first.id;
+    nowPlayingTrack = first;
+  }
+
+  scheduleStateSave();
+  emitQueueUpdate();
+  emitStateUpdate();
+
+  if (nowPlayingTrack) {
+    io.emit('track-playing-changed', { track: nowPlayingTrack });
+  }
+
+  res.json({
+    success: true,
+    count: restartedTracks.length,
+    currentTrack: nowPlayingTrack,
+    message: `Playlist restarted with ${restartedTracks.length} songs from history.`
+  });
+});
+
 // GET /api/player/upcoming (DJ only): Returns track that would play next without changing anything
 app.get('/api/player/upcoming', requireDj, (req, res) => {
-  const pending = sortQueue(queue, true);
+  const allowGuest = globalState.settings.allowGuestPlayback !== false;
+  const pending = sortQueue(queue, true, allowGuest);
   res.json({ track: pending.length > 0 ? pending[0] : null });
 });
 
@@ -936,8 +1169,10 @@ app.post('/api/admin/verify-pin', (req, res) => {
     return res.status(500).json({ error: 'DJ_PIN is not configured on the server environment.' });
   }
 
-  const { pin } = req.body;
-  if (pin === runtimeDjPin) {
+  const cleanPin = String(req.body?.pin || '').trim();
+  const cleanExpectedPin = String(runtimeDjPin || process.env.DJ_PIN || '').trim().replace(/^["']|["']$/g, '');
+
+  if (cleanPin && cleanExpectedPin && cleanPin === cleanExpectedPin) {
     pinAttemptMap.delete(ip);
     const token = crypto.randomUUID();
     validDjTokens.add(token);
@@ -955,11 +1190,23 @@ app.post(['/api/admin/settings', '/api/settings'], requireDj, (req, res) => {
     if (typeof settings.fallbackSkipSeconds === 'number') {
       settings.fallbackSkipSeconds = Math.max(0, Math.min(60, Math.round(settings.fallbackSkipSeconds)));
     }
+    if (typeof settings.maxGuestTrackDurationSeconds === 'number') {
+      settings.maxGuestTrackDurationSeconds = Math.max(0, Math.min(1800, Math.round(settings.maxGuestTrackDurationSeconds)));
+    }
+    if (typeof settings.masterToRequestSwitchDelaySeconds === 'number') {
+      settings.masterToRequestSwitchDelaySeconds = Math.max(0, Math.min(60, Math.round(settings.masterToRequestSwitchDelaySeconds)));
+    }
+    if (typeof settings.allowGuestPlayback === 'boolean') {
+      settings.allowGuestPlayback = settings.allowGuestPlayback;
+    }
+
     globalState.settings = {
       ...globalState.settings,
       ...settings,
     };
+    scheduleStateSave();
     emitStateUpdate();
+    emitQueueUpdate();
     return res.json(globalState.settings);
   }
   res.status(400).json({ error: 'Invalid settings payload' });

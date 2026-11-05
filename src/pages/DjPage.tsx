@@ -18,7 +18,10 @@ import {
   Volume2,
   KeyRound,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Plus,
+  ListMusic,
+  Clock
 } from 'lucide-react';
 import { QueueItem, GlobalState, DjSettings, PartyContributor } from '../types';
 import { socket } from '../lib/socket';
@@ -35,6 +38,9 @@ const defaultSettings: DjSettings = {
   peakTimeFastMode: false,
   vibeTagFilter: 'all',
   fallbackSkipSeconds: 10,
+  allowGuestPlayback: true,
+  maxGuestTrackDurationSeconds: 240,
+  masterToRequestSwitchDelaySeconds: 10,
 };
 
 export function DjPage() {
@@ -48,6 +54,10 @@ export function DjPage() {
   });
   const [leaderboard, setLeaderboard] = useState<PartyContributor[]>([]);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+
+  // Master List Add state
+  const [newMasterUrl, setNewMasterUrl] = useState<string>('');
+  const [isAddingMaster, setIsAddingMaster] = useState<boolean>(false);
 
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -76,7 +86,7 @@ export function DjPage() {
   const [isSendingAnnouncement, setIsSendingAnnouncement] = useState<boolean>(false);
 
   // Queue View Tab & Filter
-  const [queueViewTab, setQueueViewTab] = useState<'pending' | 'played' | 'contributors'>('pending');
+  const [queueViewTab, setQueueViewTab] = useState<'pending' | 'played' | 'master' | 'contributors'>('pending');
   const [filterSearch, setFilterSearch] = useState<string>('');
 
   // Undo support
@@ -291,6 +301,25 @@ export function DjPage() {
     }
   };
 
+  const [isRestartingPlaylist, setIsRestartingPlaylist] = useState<boolean>(false);
+
+  const handleRestartPlaylist = async () => {
+    setIsRestartingPlaylist(true);
+    try {
+      const res = await djFetch('/api/queue/restart-playlist', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(data.message || `Restarted playlist with ${data.count} songs from history!`);
+      } else {
+        showToast(data.error || 'Failed to restart playlist');
+      }
+    } catch {
+      showToast('Network error restarting playlist');
+    } finally {
+      setIsRestartingPlaylist(false);
+    }
+  };
+
   const handleSaveSettings = async () => {
     setIsSavingSettings(true);
     try {
@@ -328,13 +357,72 @@ export function DjPage() {
     }
   };
 
+  const handleToggleGuestPlayback = async () => {
+    const nextSettings = {
+      ...localSettings,
+      allowGuestPlayback: localSettings.allowGuestPlayback === false ? true : false,
+    };
+    setLocalSettings(nextSettings);
+    try {
+      const res = await djFetch('/api/admin/settings', {
+        method: 'POST',
+        body: JSON.stringify({ settings: nextSettings }),
+      });
+      if (res.ok) {
+        showToast(nextSettings.allowGuestPlayback ? 'Guest request playback ENABLED' : 'Guest request playback DISABLED (Only Master tracks play)');
+      } else {
+        showToast('Failed to toggle guest playback');
+      }
+    } catch {
+      showToast('Network error updating guest playback toggle');
+    }
+  };
+
+  const handleAddMasterList = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newMasterUrl.trim()) return;
+    setIsAddingMaster(true);
+    try {
+      const res = await djFetch('/api/admin/masterlist', {
+        method: 'POST',
+        body: JSON.stringify({ urlOrId: newMasterUrl.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(`Added to Master List: ${data.item?.title || 'Song'}`);
+        setNewMasterUrl('');
+      } else {
+        showToast(data.error || 'Failed to add track to master list');
+      }
+    } catch {
+      showToast('Network error adding to master list');
+    } finally {
+      setIsAddingMaster(false);
+    }
+  };
+
   const handlePlayNow = async (track: QueueItem) => {
     try {
-      await djFetch(`/api/queue/${track.id}/status`, {
+      const res = await djFetch(`/api/queue/${track.id}/status`, {
         method: 'PUT',
         body: JSON.stringify({ status: 'playing' }),
       });
-      showToast(`Now playing: ${track.title}`);
+      if (res.ok) {
+        showToast(`Now playing: ${track.title}`);
+      } else {
+        // Fallback to play-item
+        await djFetch('/api/queue/play-item', {
+          method: 'POST',
+          body: JSON.stringify({
+            videoId: track.youtube_id,
+            title: track.title,
+            channel_title: track.channel_title,
+            thumbnail_url: track.thumbnail_url,
+            is_master_list: track.is_master_list,
+          }),
+        });
+        showToast(`Now playing: ${track.title}`);
+      }
     } catch {
       showToast('Failed to set track as playing');
     }
@@ -426,7 +514,7 @@ export function DjPage() {
 
   // Sorted queue items
   const nowPlaying = queue.find((q) => q.status === 'playing') || null;
-  const pendingTracks = sortQueue(queue, true);
+  const pendingTracks = sortQueue(queue, localSettings.allowGuestPlayback ?? true);
   const upNext = pendingTracks[0] || null;
 
   // Filtered view items
@@ -434,6 +522,7 @@ export function DjPage() {
     .filter((q) => {
       if (queueViewTab === 'pending') return q.status === 'pending';
       if (queueViewTab === 'played') return q.status === 'played';
+      if (queueViewTab === 'master') return q.is_master_list === true;
       return true;
     })
     .filter((q) => {
@@ -446,7 +535,9 @@ export function DjPage() {
       );
     });
 
-  const displayedQueue = queueViewTab === 'pending' ? sortQueue(rawFiltered) : rawFiltered;
+  const displayedQueue = queueViewTab === 'pending'
+    ? sortQueue(rawFiltered, localSettings.allowGuestPlayback ?? true)
+    : rawFiltered;
 
   // PIN PROTECTION MODAL OVERLAY
   if (!isAuthenticated) {
@@ -816,6 +907,83 @@ export function DjPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {/* Guest Playback Toggle */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between font-mono text-xs">
+                <span className="text-[#aeb3a5]">Allow Guest Playback</span>
+                <span className="text-[#dfed66] font-bold">
+                  {localSettings.allowGuestPlayback !== false ? 'ENABLED' : 'DISABLED'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setLocalSettings({
+                    ...localSettings,
+                    allowGuestPlayback: localSettings.allowGuestPlayback === false ? true : false,
+                  })
+                }
+                className={`w-full py-1.5 rounded-sm font-mono text-xs font-bold uppercase transition-colors cursor-pointer border ${
+                  localSettings.allowGuestPlayback !== false
+                    ? 'bg-[#dfed66] text-[#191c18] border-[#dfed66]'
+                    : 'bg-[#191c18] text-[#fca5a5] border-[#7a3030]'
+                }`}
+              >
+                {localSettings.allowGuestPlayback !== false ? '● Guest Requests Play' : '○ Master Songs Only'}
+              </button>
+              <p className="font-mono text-[11px] text-[#aeb3a5]">Allow guests to request & upvote before playing</p>
+            </div>
+
+            {/* Max Guest Track Duration */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between font-mono text-xs">
+                <span className="text-[#aeb3a5]">Max Guest Play Time</span>
+                <span className="text-[#dfed66] font-bold">
+                  {localSettings.maxGuestTrackDurationSeconds ? `${localSettings.maxGuestTrackDurationSeconds}s (${Math.round(localSettings.maxGuestTrackDurationSeconds/60)}m)` : 'Unlimited'}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1800"
+                step="30"
+                value={localSettings.maxGuestTrackDurationSeconds ?? 240}
+                onChange={(e) =>
+                  setLocalSettings({
+                    ...localSettings,
+                    maxGuestTrackDurationSeconds: parseInt(e.target.value, 10),
+                  })
+                }
+                className="w-full accent-[#dfed66] cursor-pointer"
+              />
+              <p className="font-mono text-[11px] text-[#aeb3a5]">Max guest song duration (0 = unlimited). Does NOT apply to Master List songs!</p>
+            </div>
+
+            {/* Master-to-Request Switch Delay */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between font-mono text-xs">
+                <span className="text-[#aeb3a5]">Master-to-Request Delay</span>
+                <span className="text-[#dfed66] font-bold">
+                  {localSettings.masterToRequestSwitchDelaySeconds ?? 10}s
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="60"
+                step="5"
+                value={localSettings.masterToRequestSwitchDelaySeconds ?? 10}
+                onChange={(e) =>
+                  setLocalSettings({
+                    ...localSettings,
+                    masterToRequestSwitchDelaySeconds: parseInt(e.target.value, 10),
+                  })
+                }
+                className="w-full accent-[#dfed66] cursor-pointer"
+              />
+              <p className="font-mono text-[11px] text-[#aeb3a5]">Delay before switching from Master track to new Guest Request</p>
+            </div>
+
             {/* Cooldown */}
             <div className="space-y-1.5">
               <div className="flex justify-between font-mono text-xs">
@@ -969,6 +1137,11 @@ export function DjPage() {
                   VIP
                 </span>
               )}
+              {nowPlaying?.is_master_list && (
+                <span className="text-[#dfed66] border border-[#dfed66]/40 px-1.5 py-0.2 rounded-xs font-bold">
+                  MASTER LIST
+                </span>
+              )}
             </div>
             <p className="text-sm font-bold text-[#efefdf] truncate mt-0.5">
               {nowPlaying?.title || 'No active track playing'}
@@ -1007,6 +1180,11 @@ export function DjPage() {
                   VIP
                 </span>
               )}
+              {upNext?.is_master_list && (
+                <span className="text-[#dfed66] border border-[#dfed66]/40 px-1.5 py-0.2 rounded-xs font-bold">
+                  MASTER LIST
+                </span>
+              )}
             </div>
             <p className="text-sm font-bold text-[#efefdf] truncate mt-0.5">
               {upNext?.title || 'Queue is currently clear'}
@@ -1034,7 +1212,7 @@ export function DjPage() {
       <div className="bg-[#22251f] border border-[#44493e] rounded-sm space-y-0 overflow-hidden">
         {/* Table Controls Bar (Tabs & Search) */}
         <div className="p-3 border-b border-[#44493e] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
             <button
               onClick={() => setQueueViewTab('pending')}
               className={`px-3 py-1.5 rounded-sm font-mono text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer ${
@@ -1044,6 +1222,16 @@ export function DjPage() {
               }`}
             >
               Running Order ({queue.filter((q) => q.status === 'pending').length})
+            </button>
+            <button
+              onClick={() => setQueueViewTab('master')}
+              className={`px-3 py-1.5 rounded-sm font-mono text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                queueViewTab === 'master'
+                  ? 'bg-[#dfed66] text-[#191c18]'
+                  : 'bg-[#191c18] border border-[#44493e] text-[#aeb3a5] hover:text-[#efefdf]'
+              }`}
+            >
+              Master List ({queue.filter((q) => q.is_master_list).length})
             </button>
             <button
               onClick={() => setQueueViewTab('played')}
@@ -1065,6 +1253,19 @@ export function DjPage() {
             >
               Contributors ({leaderboard.length})
             </button>
+
+            {/* Quick Restart Playlist button when all scheduled songs have completed */}
+            {queue.filter((q) => q.status === 'pending').length === 0 && queue.filter((q) => q.status === 'played').length > 0 && (
+              <button
+                onClick={handleRestartPlaylist}
+                disabled={isRestartingPlaylist}
+                className="px-2.5 py-1.5 rounded-sm font-mono text-xs font-bold uppercase tracking-wider bg-[#dfed66] text-[#191c18] hover:bg-[#d2e057] transition-colors cursor-pointer flex items-center gap-1.5"
+                title="Restart setlist from played history"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${isRestartingPlaylist ? 'animate-spin' : ''}`} />
+                <span>Restart Playlist ({queue.filter((q) => q.status === 'played').length})</span>
+              </button>
+            )}
           </div>
 
           <div className="relative w-full sm:w-56">
@@ -1079,7 +1280,31 @@ export function DjPage() {
           </div>
         </div>
 
-        {/* Tab 1 & 2: Compact Running-Order Table */}
+        {/* Master List Addition Bar */}
+        {queueViewTab === 'master' && (
+          <form onSubmit={handleAddMasterList} className="p-3 bg-[#191c18] border-b border-[#44493e] flex flex-col sm:flex-row gap-2 items-center">
+            <div className="font-mono text-xs text-[#dfed66] font-bold uppercase tracking-wider whitespace-nowrap flex items-center gap-1.5">
+              <Plus className="w-4 h-4 text-[#dfed66]" />
+              <span>Add to Master List:</span>
+            </div>
+            <input
+              type="text"
+              placeholder="Paste YouTube URL or video ID (e.g., https://youtube.com/watch?v=...)"
+              value={newMasterUrl}
+              onChange={(e) => setNewMasterUrl(e.target.value)}
+              className="flex-1 bg-[#22251f] border border-[#44493e] rounded-sm px-3 py-1.5 text-xs font-mono text-[#efefdf] placeholder-[#aeb3a5]/50 focus:outline-none focus:border-[#dfed66]"
+            />
+            <button
+              type="submit"
+              disabled={isAddingMaster || !newMasterUrl.trim()}
+              className="px-3.5 py-1.5 rounded-sm bg-[#dfed66] hover:bg-[#d2e057] text-[#191c18] font-mono text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+            >
+              {isAddingMaster ? 'Adding...' : 'Add Master Track'}
+            </button>
+          </form>
+        )}
+
+        {/* Tab 1, 2 & Master: Compact Running-Order Table */}
         {queueViewTab !== 'contributors' ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left font-mono text-xs">
@@ -1096,8 +1321,10 @@ export function DjPage() {
                 {displayedQueue.map((track, idx) => (
                   <tr
                     key={track.id}
-                    className={`hover:bg-[#191c18]/60 transition-colors ${
-                      track.status === 'playing' ? 'bg-[#191c18]/80' : ''
+                    onDoubleClick={() => handlePlayNow(track)}
+                    title="Double-click to play song immediately"
+                    className={`hover:bg-[#191c18]/80 cursor-pointer transition-colors ${
+                      track.status === 'playing' ? 'bg-[#191c18]/90 border-l-2 border-[#dfed66]' : ''
                     }`}
                   >
                     {/* Index Column */}
@@ -1118,9 +1345,16 @@ export function DjPage() {
                           className="w-10 h-7 object-cover rounded-xs border border-[#44493e] shrink-0"
                         />
                         <div className="min-w-0">
-                          <p className="font-bold text-[#efefdf] truncate max-w-md">
-                            {track.title}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-[#efefdf] truncate max-w-md">
+                              {track.title}
+                            </p>
+                            {track.is_master_list && (
+                              <span className="text-[10px] font-mono text-[#dfed66] bg-[#dfed66]/10 px-1 rounded-xs shrink-0">
+                                MASTER
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[11px] text-[#aeb3a5] truncate">
                             {track.channel_title}
                           </p>
@@ -1142,31 +1376,38 @@ export function DjPage() {
                     <td className="py-2.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         {track.status === 'pending' && (
-                          <>
-                            <button
-                              onClick={() => handleTogglePin(track.id)}
-                              className={`p-1.5 rounded-sm border transition-colors cursor-pointer ${
-                                track.is_pinned
-                                  ? 'bg-[#dfed66] text-[#191c18] border-[#dfed66]'
-                                  : 'bg-[#191c18] border-[#44493e] text-[#aeb3a5] hover:text-[#efefdf]'
-                              }`}
-                              title={track.is_pinned ? 'Unpin VIP Track' : 'Pin VIP (Plays Next)'}
-                            >
-                              <Pin className="w-3.5 h-3.5" />
-                            </button>
-
-                            <button
-                              onClick={() => handlePlayNow(track)}
-                              className="px-2 py-1 rounded-sm bg-[#191c18] border border-[#44493e] hover:border-[#dfed66] text-[#efefdf] hover:text-[#dfed66] text-xs font-bold uppercase transition-colors cursor-pointer"
-                              title="Play Now"
-                            >
-                              Play
-                            </button>
-                          </>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTogglePin(track.id);
+                            }}
+                            className={`p-1.5 rounded-sm border transition-colors cursor-pointer ${
+                              track.is_pinned
+                                ? 'bg-[#dfed66] text-[#191c18] border-[#dfed66]'
+                                : 'bg-[#191c18] border-[#44493e] text-[#aeb3a5] hover:text-[#efefdf]'
+                            }`}
+                            title={track.is_pinned ? 'Unpin VIP Track' : 'Pin VIP (Plays Next)'}
+                          >
+                            <Pin className="w-3.5 h-3.5" />
+                          </button>
                         )}
 
                         <button
-                          onClick={() => handleDelete(track.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePlayNow(track);
+                          }}
+                          className="px-2 py-1 rounded-sm bg-[#191c18] border border-[#44493e] hover:border-[#dfed66] text-[#efefdf] hover:text-[#dfed66] text-xs font-bold uppercase transition-colors cursor-pointer"
+                          title="Play Now (Double-click row works too)"
+                        >
+                          {track.status === 'playing' ? 'Playing' : track.status === 'played' ? 'Replay' : 'Play'}
+                        </button>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(track.id);
+                          }}
                           className="p-1.5 rounded-sm bg-[#191c18] border border-[#44493e] hover:border-[#7a3030] text-[#aeb3a5] hover:text-[#fca5a5] transition-colors cursor-pointer"
                           title="Remove from queue (Undoable)"
                         >
@@ -1179,8 +1420,30 @@ export function DjPage() {
 
                 {displayedQueue.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-[#aeb3a5]">
-                      No songs in this view match your filter.
+                    <td colSpan={5} className="py-12 px-4 text-center">
+                      {queueViewTab === 'pending' && queue.filter((q) => q.status === 'played').length > 0 && !filterSearch ? (
+                        <div className="max-w-md mx-auto space-y-3">
+                          <div className="w-10 h-10 mx-auto rounded-sm bg-[#191c18] border border-[#44493e] flex items-center justify-center text-[#dfed66]">
+                            <RotateCcw className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-sm text-[#efefdf]">All Running Order Songs Complete</p>
+                            <p className="text-xs text-[#aeb3a5] mt-1">
+                              All scheduled tracks have finished. Restart the setlist using the {queue.filter((q) => q.status === 'played').length} songs from played history (includes both masterlist and guest requests).
+                            </p>
+                          </div>
+                          <button
+                            onClick={handleRestartPlaylist}
+                            disabled={isRestartingPlaylist}
+                            className="px-4 py-2 rounded-sm bg-[#dfed66] hover:bg-[#d2e057] text-[#191c18] font-mono text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer inline-flex items-center gap-2"
+                          >
+                            <RotateCcw className={`w-3.5 h-3.5 ${isRestartingPlaylist ? 'animate-spin' : ''}`} />
+                            <span>{isRestartingPlaylist ? 'Restarting...' : `Restart Playlist (${queue.filter((q) => q.status === 'played').length} Songs)`}</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[#aeb3a5]">No songs in this view match your filter.</span>
+                      )}
                     </td>
                   </tr>
                 )}
