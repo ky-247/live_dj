@@ -449,23 +449,28 @@ function extractYouTubeId(input: string): string | null {
   }
 
   try {
-    const url = new URL(trimmed);
+    const validUrl = (trimmed.startsWith('http://') || trimmed.startsWith('https://'))
+      ? trimmed
+      : `https://${trimmed}`;
+    const url = new URL(validUrl);
     if (url.hostname.includes('youtube.com')) {
       if (url.pathname.startsWith('/shorts/')) {
-        return url.pathname.split('/shorts/')[1].split('/')[0].split('?')[0];
+        const id = url.pathname.split('/shorts/')[1]?.split('/')[0]?.split('?')[0];
+        if (id && id.length === 11) return id;
       }
       const v = url.searchParams.get('v');
       if (v && v.length === 11) return v;
     }
-    if (url.hostname === 'youtu.be') {
+    if (url.hostname === 'youtu.be' || url.hostname.endsWith('.youtu.be')) {
       const id = url.pathname.slice(1).split('?')[0].split('/')[0];
       if (id.length === 11) return id;
     }
-  } catch {
-    const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/;
-    const match = trimmed.match(regExp);
-    if (match && match[1]) return match[1];
-  }
+  } catch {}
+
+  const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/;
+  const match = trimmed.match(regExp);
+  if (match && match[1]) return match[1];
+
   return null;
 }
 
@@ -981,21 +986,22 @@ app.post('/api/queue/play-item', requireDj, (req, res) => {
 
 // POST /api/admin/masterlist (DJ only): Add a song to the master list (persisted across restarts and redeploys)
 app.post(['/api/admin/masterlist', '/api/masterlist'], requireDj, async (req, res) => {
-  const { query, youtube_id, title, channel_title, thumbnail_url } = req.body || {};
-  let yId = youtube_id;
+  const { query, youtube_id, videoId, title, channel_title, thumbnail_url, urlOrId, url } = req.body || {};
+  const rawInput = (urlOrId || url || query || youtube_id || videoId || '').toString().trim();
+
+  let yId = youtube_id || videoId;
   let tTitle = title;
   let cTitle = channel_title;
   let tThumb = thumbnail_url;
 
-  if (!yId && query) {
-    const searchQ = String(query).trim();
-    const extracted = extractYouTubeId(searchQ);
+  if (rawInput) {
+    const extracted = extractYouTubeId(rawInput);
     if (extracted) {
       yId = extracted;
     }
   }
 
-  if (yId && (!tTitle || !tThumb)) {
+  if (yId) {
     const meta = await resolveSongMetadata(yId);
     tTitle = tTitle || meta.title;
     cTitle = cTitle || meta.channelTitle;
@@ -1024,7 +1030,12 @@ app.post(['/api/admin/masterlist', '/api/masterlist'], requireDj, async (req, re
   emitQueueUpdate();
   emitStateUpdate();
 
-  res.json({ success: true, track: newMasterTrack, message: 'Song added to Master List and persisted across redeploys!' });
+  res.json({
+    success: true,
+    item: newMasterTrack,
+    track: newMasterTrack,
+    message: 'Song added to Master List and persisted across redeploys!'
+  });
 });
 
 // POST /api/queue/restart-playlist (DJ only): Restarts playlist from played history (includes both masterlist and requested songs)

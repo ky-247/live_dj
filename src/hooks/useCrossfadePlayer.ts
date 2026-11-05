@@ -55,6 +55,10 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
   const isReadyA = useRef<boolean>(false);
   const isReadyB = useRef<boolean>(false);
 
+  // Synchronized state refs for 100% video-id and title match
+  const currentTrackRef = useRef<QueueItem | null>(null);
+  const loadedVideoIdRef = useRef<string | null>(null);
+
   // Crossfade, session, and master switch trackers
   const isCrossfadingRef = useRef<boolean>(false);
   const isFirstSessionTrackRef = useRef<boolean>(true);
@@ -189,9 +193,23 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     isCrossfadingRef.current = false;
     masterSwitchStartTimeRef.current = null;
     setSwitchNoticeLabel(null);
+
+    // Sync refs immediately
+    currentTrackRef.current = track;
+    loadedVideoIdRef.current = track.youtube_id;
+
     setCurrentTrack(track);
     setIsPlaying(true);
     setErrorNotice(null);
+
+    // Stop and mute idle instance so no trailing audio/video plays from previous track
+    const idleInst = getIdleInstance();
+    if (idleInst) {
+      try {
+        idleInst.mute();
+        idleInst.stopVideo();
+      } catch {}
+    }
 
     const skipInfo = await fetchSkipInfo(track.youtube_id);
     activeSkipInfoRef.current = skipInfo;
@@ -241,7 +259,7 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     }
 
     setTimeout(() => preloadUpcoming(), 1000);
-  }, [clearFades, fetchSkipInfo, updateSkipLabel, getActiveInstance, getTargetVolume, preloadUpcoming]);
+  }, [clearFades, fetchSkipInfo, updateSkipLabel, getActiveInstance, getIdleInstance, getTargetVolume, preloadUpcoming]);
 
   // Advance to next song via server-authoritative /api/player/advance
   const advanceTrack = useCallback(async (targetTrackId?: string) => {
@@ -261,6 +279,8 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
       const track: QueueItem | null = data.track;
 
       if (!track) {
+        currentTrackRef.current = null;
+        loadedVideoIdRef.current = null;
         setCurrentTrack(null);
         setIsPlaying(false);
         setSkipInfoLabel(null);
@@ -284,16 +304,19 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     const handleTrackPlayingChanged = (data: { track: QueueItem | null }) => {
       const serverTrack = data?.track;
       if (!serverTrack) {
-        if (currentTrack) {
-          setCurrentTrack(null);
-          setIsPlaying(false);
-          setSkipInfoLabel(null);
-          setSwitchNoticeLabel(null);
-          getActiveInstance()?.stopVideo();
-        }
+        currentTrackRef.current = null;
+        loadedVideoIdRef.current = null;
+        setCurrentTrack(null);
+        setIsPlaying(false);
+        setSkipInfoLabel(null);
+        setSwitchNoticeLabel(null);
+        try {
+          playerARef.current?.stopVideo();
+          playerBRef.current?.stopVideo();
+        } catch {}
         return;
       }
-      if (serverTrack.id !== currentTrack?.id) {
+      if (serverTrack.id !== currentTrackRef.current?.id || serverTrack.youtube_id !== loadedVideoIdRef.current) {
         playTrackInstance(serverTrack, false);
       }
     };
@@ -302,7 +325,7 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     return () => {
       socket.off('track-playing-changed', handleTrackPlayingChanged);
     };
-  }, [currentTrack, playTrackInstance, getActiveInstance]);
+  }, [playTrackInstance]);
 
   // Execute crossfade transition between Active and Idle players
   const startCrossfade = useCallback(() => {
@@ -576,7 +599,18 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
         onStateChange: (e: any) => {
           playerAState.current = e.data;
           if (activePlayer === 'A') {
-            if (e.data === 1) setIsPlaying(true);
+            if (e.data === 1) {
+              setIsPlaying(true);
+              try {
+                const vidData = e.target.getVideoData?.();
+                const actualVid = vidData?.video_id;
+                const targetVid = loadedVideoIdRef.current;
+                if (actualVid && targetVid && actualVid !== targetVid) {
+                  console.warn(`Video mismatch on Player A: actual ${actualVid} vs target ${targetVid}. Self-correcting...`);
+                  e.target.loadVideoById({ videoId: targetVid });
+                }
+              } catch {}
+            }
             if (e.data === 2) setIsPlaying(false);
             if (e.data === 0 && !isCrossfadingRef.current) advanceTrack();
           }
@@ -593,7 +627,18 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
         onStateChange: (e: any) => {
           playerBState.current = e.data;
           if (activePlayer === 'B') {
-            if (e.data === 1) setIsPlaying(true);
+            if (e.data === 1) {
+              setIsPlaying(true);
+              try {
+                const vidData = e.target.getVideoData?.();
+                const actualVid = vidData?.video_id;
+                const targetVid = loadedVideoIdRef.current;
+                if (actualVid && targetVid && actualVid !== targetVid) {
+                  console.warn(`Video mismatch on Player B: actual ${actualVid} vs target ${targetVid}. Self-correcting...`);
+                  e.target.loadVideoById({ videoId: targetVid });
+                }
+              } catch {}
+            }
             if (e.data === 2) setIsPlaying(false);
             if (e.data === 0 && !isCrossfadingRef.current) advanceTrack();
           }
