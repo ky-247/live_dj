@@ -292,6 +292,7 @@ let globalState = {
 const DATA_DIR = join(__dirname, 'data');
 const STATE_FILE = join(DATA_DIR, 'state.json');
 const MASTERLIST_FILE = join(DATA_DIR, 'masterlist.json');
+const USER_REQUESTS_FILE = join(DATA_DIR, 'user_requests.json');
 
 let saveTimeout: NodeJS.Timeout | null = null;
 function scheduleStateSave() {
@@ -302,18 +303,36 @@ function scheduleStateSave() {
       if (!existsSync(DATA_DIR)) {
         mkdirSync(DATA_DIR, { recursive: true });
       }
+
+      // Serialize client upvotes and guest names for persistent state
+      const upvotesObj: Record<string, string[]> = {};
+      clientUpvotesMap.forEach((set, clientId) => {
+        upvotesObj[clientId] = Array.from(set);
+      });
+
+      const namesObj: Record<string, string> = {};
+      clientNamesMap.forEach((name, clientId) => {
+        namesObj[clientId] = name;
+      });
+
       const stateToSave = {
         queue,
         playedHistory: playedHistory.slice(-200),
         globalState,
+        clientUpvotesMap: upvotesObj,
+        clientNamesMap: namesObj,
       };
       writeFileSync(STATE_FILE, JSON.stringify(stateToSave, null, 2), 'utf-8');
 
       // Save custom master list tracks so they persist across redeploys
       const masterTracks = queue.filter(q => q.is_master_list);
       writeFileSync(MASTERLIST_FILE, JSON.stringify(masterTracks, null, 2), 'utf-8');
+
+      // Save user/guest requested tracks into dedicated user_requests.json for multi-restart persistence
+      const userTracks = queue.filter(q => !q.is_master_list);
+      writeFileSync(USER_REQUESTS_FILE, JSON.stringify(userTracks, null, 2), 'utf-8');
     } catch (err) {
-      console.error('Failed to save state to data/state.json:', err);
+      console.error('Failed to save state to data/ files:', err);
     }
   }, 1000);
 }
@@ -339,10 +358,37 @@ function loadPersistedState() {
           },
         };
       }
+      if (data.clientUpvotesMap && typeof data.clientUpvotesMap === 'object') {
+        Object.entries(data.clientUpvotesMap).forEach(([cid, arr]) => {
+          if (Array.isArray(arr)) {
+            clientUpvotesMap.set(cid, new Set(arr as string[]));
+          }
+        });
+      }
+      if (data.clientNamesMap && typeof data.clientNamesMap === 'object') {
+        Object.entries(data.clientNamesMap).forEach(([cid, name]) => {
+          if (typeof name === 'string') {
+            clientNamesMap.set(cid, name);
+          }
+        });
+      }
       console.log(`Loaded persisted state: ${queue.length} tracks in queue, ${playedHistory.length} in history.`);
     }
 
-    // Also check masterlist.json to preserve any DJ added masterlist songs across redeploys
+    // Restore and merge user requested songs from user_requests.json
+    if (existsSync(USER_REQUESTS_FILE)) {
+      const userContent = readFileSync(USER_REQUESTS_FILE, 'utf-8');
+      const savedUserTracks: QueueTrack[] = JSON.parse(userContent);
+      if (Array.isArray(savedUserTracks)) {
+        savedUserTracks.forEach((t) => {
+          if (!queue.some((q) => q.id === t.id)) {
+            queue.push(t);
+          }
+        });
+      }
+    }
+
+    // Restore and merge masterlist songs from masterlist.json
     if (existsSync(MASTERLIST_FILE)) {
       const masterContent = readFileSync(MASTERLIST_FILE, 'utf-8');
       const savedMasterTracks: QueueTrack[] = JSON.parse(masterContent);
@@ -355,7 +401,7 @@ function loadPersistedState() {
       }
     }
   } catch (err) {
-    console.warn('Could not load data/state.json, starting with default queue:', err);
+    console.warn('Could not load data files, starting with default queue:', err);
   }
 }
 
@@ -1265,6 +1311,11 @@ app.post(['/api/admin/reset', '/api/queue/reset'], requireDj, (req, res) => {
   clientUpvotesMap.clear();
   globalState.nowPlayingTrackId = null;
   globalState.mvpRevealActive = false;
+  if (existsSync(USER_REQUESTS_FILE)) {
+    try {
+      writeFileSync(USER_REQUESTS_FILE, JSON.stringify([], null, 2), 'utf-8');
+    } catch {}
+  }
   emitQueueUpdate();
   emitStateUpdate();
   res.json({ success: true, count: queue.length });
