@@ -13,7 +13,8 @@ import {
   ShieldCheck,
   Headphones,
   Check,
-  AlertCircle
+  AlertCircle,
+  RotateCcw
 } from 'lucide-react';
 import { QueueItem, GlobalState } from '../types';
 import { socket } from '../lib/socket';
@@ -536,6 +537,28 @@ export function PlayerPage() {
             >
               <SkipForward className="w-4 h-4" />
               <span className="hidden sm:inline">Skip (Crossfade)</span>
+            </button>
+
+            <button
+              onClick={async () => {
+                if (!window.confirm('Reset the entire queue back to master list? All pending guest requests will be removed.')) {
+                  return;
+                }
+                try {
+                  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                  if (djToken) headers['Authorization'] = `Bearer ${djToken}`;
+                  const res = await fetch('/api/admin/reset', { method: 'POST', headers });
+                  if (res.ok) {
+                    const qRes = await fetch('/api/queue');
+                    if (qRes.ok) setQueue(await qRes.json());
+                  }
+                } catch {}
+              }}
+              className="h-11 px-3.5 rounded-sm bg-[#191c18] border border-[#7a3030] text-[#fca5a5] hover:bg-[#2a1b1b] flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider transition-colors cursor-pointer"
+              title="Reset Queue"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span className="hidden sm:inline">Reset</span>
             </button>
           </div>
 

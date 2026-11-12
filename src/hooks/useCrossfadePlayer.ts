@@ -239,16 +239,18 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
           step++;
           const currentVol = Math.round((step / totalSteps) * targetVol);
           try {
+            activeInst.unMute();
             activeInst.setVolume(currentVol);
           } catch {}
           if (step >= totalSteps) {
             clearFades();
+            activeInst.unMute();
             activeInst.setVolume(targetVol);
           }
         }, 100);
       } else {
-        activeInst.setVolume(targetVol);
         activeInst.unMute();
+        activeInst.setVolume(targetVol);
         const playPromise = activeInst.loadVideoById({
           videoId: track.youtube_id,
           startSeconds: skipInfo.startSeconds,
@@ -257,6 +259,13 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
         if (playPromise !== undefined) {
           Promise.resolve(playPromise).catch(() => setAutoplayBlocked(true));
         }
+        // Force secondary unmute check to wake up YouTube audio context
+        setTimeout(() => {
+          try {
+            activeInst.unMute();
+            activeInst.setVolume(targetVol);
+          } catch {}
+        }, 200);
       }
     }
 
@@ -399,6 +408,12 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
         try {
           idleInst.setVolume(targetVol);
           idleInst.unMute();
+          setTimeout(() => {
+            try {
+              idleInst.setVolume(targetVol);
+              idleInst.unMute();
+            } catch {}
+          }, 250);
         } catch {}
 
         authFetch('/api/player/advance', {
@@ -475,6 +490,12 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
           try {
             idleInst.setVolume(targetVol);
             idleInst.unMute();
+            setTimeout(() => {
+              try {
+                idleInst.setVolume(targetVol);
+                idleInst.unMute();
+              } catch {}
+            }, 250);
           } catch {}
 
           authFetch('/api/player/advance', {
