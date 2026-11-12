@@ -318,9 +318,12 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
         } catch {}
         return;
       }
-      if (serverTrack.id !== currentTrackRef.current?.id || serverTrack.youtube_id !== loadedVideoIdRef.current) {
-        playTrackInstance(serverTrack, false);
+      // If server track matches current track ID or YouTube ID, do not reload/restart video
+      if (serverTrack.id === currentTrackRef.current?.id || serverTrack.youtube_id === loadedVideoIdRef.current) {
+        setCurrentTrack(serverTrack);
+        return;
       }
+      playTrackInstance(serverTrack, false);
     };
 
     socket.on('track-playing-changed', handleTrackPlayingChanged);
@@ -380,12 +383,23 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
 
         const newActive = activePlayer === 'A' ? 'B' : 'A';
         const preloaded = upcomingTrack;
+
+        // Update refs immediately so socket broadcast won't restart the track
+        currentTrackRef.current = preloaded;
+        loadedVideoIdRef.current = preloaded.youtube_id;
+        currentTrackStartedAtRef.current = Date.now();
+
         setActivePlayer(newActive);
         setCurrentTrack(preloaded);
         activeSkipInfoRef.current = upcomingSkipInfoRef.current;
         updateSkipLabel(upcomingSkipInfoRef.current);
         upcomingSkipInfoRef.current = null;
         isCrossfadingRef.current = false;
+
+        try {
+          idleInst.setVolume(targetVol);
+          idleInst.unMute();
+        } catch {}
 
         authFetch('/api/player/advance', {
           method: 'POST',
@@ -446,12 +460,22 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
 
           const newActive = activePlayer === 'A' ? 'B' : 'A';
           const preloaded = upcomingTrack;
+
+          currentTrackRef.current = preloaded;
+          loadedVideoIdRef.current = preloaded.youtube_id;
+          currentTrackStartedAtRef.current = Date.now();
+
           setActivePlayer(newActive);
           setCurrentTrack(preloaded);
           activeSkipInfoRef.current = upcomingSkipInfoRef.current;
           updateSkipLabel(upcomingSkipInfoRef.current);
           upcomingSkipInfoRef.current = null;
           isCrossfadingRef.current = false;
+
+          try {
+            idleInst.setVolume(targetVol);
+            idleInst.unMute();
+          } catch {}
 
           authFetch('/api/player/advance', {
             method: 'POST',
