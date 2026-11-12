@@ -171,58 +171,19 @@ const popularTracks = [
   }
 ];
 
-const initialQueue: QueueTrack[] = [
-  {
-    id: 'master-1',
-    created_at: new Date(Date.now() - 3600000).toISOString(),
-    youtube_id: 'YxWlaYCA8MU',
-    title: 'Jhoome Jo Pathaan | Shah Rukh Khan, Deepika Padukone | Arijit Singh',
-    channel_title: 'YRF',
-    thumbnail_url: 'https://i.ytimg.com/vi/YxWlaYCA8MU/hqdefault.jpg',
-    requested_by: 'Host / Master Playlist',
-    upvotes: 4,
-    is_master_list: true,
-    status: 'pending'
-  },
-  {
-    id: 'master-2',
-    created_at: new Date(Date.now() - 3000000).toISOString(),
-    youtube_id: 'kw4tT7SCmaY',
-    title: 'Kala Chashma | Baar Baar Dekho | Sidharth M, Katrina K | Badshah, Neha Kakkar',
-    channel_title: 'Zee Music Company',
-    thumbnail_url: 'https://i.ytimg.com/vi/kw4tT7SCmaY/hqdefault.jpg',
-    requested_by: 'Host / Master Playlist',
-    upvotes: 6,
-    is_master_list: true,
-    status: 'pending'
-  },
-  {
-    id: 'guest-req-1',
-    created_at: new Date(Date.now() - 1200000).toISOString(),
-    youtube_id: 'RLzC55ai0eo',
-    title: 'Tauba Tauba | Bad Newz | Vicky Kaushal, Triptii Dimri | Karan Aujla',
-    channel_title: 'Saregama Music',
-    thumbnail_url: 'https://i.ytimg.com/vi/RLzC55ai0eo/hqdefault.jpg',
-    requested_by: 'Aman & Friends (Munich)',
-    upvotes: 9,
-    is_master_list: false,
-    status: 'pending',
-    client_id: 'client_aman_demo'
-  },
-  {
-    id: 'guest-req-2',
-    created_at: new Date(Date.now() - 600000).toISOString(),
-    youtube_id: 'OqEC6h7nFfM',
-    title: 'Mundian To Bach Ke (The Dhol Club Remix) | Panjabi MC',
-    channel_title: 'Panjabi MC Official',
-    thumbnail_url: 'https://i.ytimg.com/vi/OqEC6h7nFfM/hqdefault.jpg',
-    requested_by: 'Pooja from Frankfurt',
-    upvotes: 5,
-    is_master_list: false,
-    status: 'pending',
-    client_id: 'client_pooja_demo'
-  }
-];
+// Initial Master List tracks seeded from curated party favorites catalog
+const initialQueue: QueueTrack[] = popularTracks.map((track, idx) => ({
+  id: `master-${idx + 1}`,
+  created_at: new Date(Date.now() - (popularTracks.length - idx) * 60000).toISOString(),
+  youtube_id: track.videoId,
+  title: track.title,
+  channel_title: track.channelTitle,
+  thumbnail_url: track.thumbnail,
+  requested_by: 'Host / Master Playlist',
+  upvotes: 0,
+  is_master_list: true,
+  status: 'pending' as const,
+}));
 
 let queue: QueueTrack[] = [...initialQueue];
 let playedHistory: PlayedHistoryEntry[] = [];
@@ -261,10 +222,7 @@ function requireDj(req: express.Request, res: express.Response, next: express.Ne
 // Anti-Spam Tracking Maps
 const clientLastRequestTime = new Map<string, number>();
 const clientUpvotesMap = new Map<string, Set<string>>(); // clientId -> set of track IDs
-const clientNamesMap = new Map<string, string>([
-  ['client_aman_demo', 'Aman & Friends (Munich)'],
-  ['client_pooja_demo', 'Pooja from Frankfurt']
-]);
+const clientNamesMap = new Map<string, string>();
 
 let globalState = {
   isLocked: false,
