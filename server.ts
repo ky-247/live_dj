@@ -171,19 +171,8 @@ const popularTracks = [
   }
 ];
 
-// Initial Master List tracks seeded from curated party favorites catalog
-const initialQueue: QueueTrack[] = popularTracks.map((track, idx) => ({
-  id: `master-${idx + 1}`,
-  created_at: new Date(Date.now() - (popularTracks.length - idx) * 60000).toISOString(),
-  youtube_id: track.videoId,
-  title: track.title,
-  channel_title: track.channelTitle,
-  thumbnail_url: track.thumbnail,
-  requested_by: 'Host / Master Playlist',
-  upvotes: 0,
-  is_master_list: true,
-  status: 'pending' as const,
-}));
+// Initial Master List tracks (empty by default so user can add songs from scratch)
+const initialQueue: QueueTrack[] = [];
 
 let queue: QueueTrack[] = [...initialQueue];
 let playedHistory: PlayedHistoryEntry[] = [];
@@ -1287,22 +1276,30 @@ app.post('/api/admin/change-pin', requireDj, (req, res) => {
   res.json({ success: true, message: 'DJ PIN updated successfully' });
 });
 
-// Reset Queue - DJ ONLY
+// Reset Queue - DJ ONLY (Clears queue completely to empty array and wipes persistent files)
 app.post(['/api/admin/reset', '/api/queue/reset'], requireDj, (req, res) => {
-  queue = [...initialQueue];
+  queue = [];
   playedHistory = [];
   clientLastRequestTime.clear();
   clientUpvotesMap.clear();
   globalState.nowPlayingTrackId = null;
   globalState.mvpRevealActive = false;
-  if (existsSync(USER_REQUESTS_FILE)) {
-    try {
+
+  try {
+    if (existsSync(STATE_FILE)) {
+      writeFileSync(STATE_FILE, JSON.stringify({ queue: [], playedHistory: [], globalState }, null, 2), 'utf-8');
+    }
+    if (existsSync(MASTERLIST_FILE)) {
+      writeFileSync(MASTERLIST_FILE, JSON.stringify([], null, 2), 'utf-8');
+    }
+    if (existsSync(USER_REQUESTS_FILE)) {
       writeFileSync(USER_REQUESTS_FILE, JSON.stringify([], null, 2), 'utf-8');
-    } catch {}
-  }
+    }
+  } catch {}
+
   emitQueueUpdate();
   emitStateUpdate();
-  res.json({ success: true, count: queue.length });
+  res.json({ success: true, count: 0, message: 'Queue completely cleared. Add songs from scratch!' });
 });
 
 // Clear played history to reset duplicate lockout - DJ ONLY
