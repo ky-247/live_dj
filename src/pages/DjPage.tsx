@@ -705,6 +705,16 @@ export function DjPage() {
             <span>{globalState.isLocked ? 'Requests Paused' : 'Requests Open'}</span>
           </button>
 
+          {/* Reset Queue Button (Always Visible) */}
+          <button
+            onClick={handleResetQueue}
+            className="px-3 py-1.5 rounded-sm font-mono text-xs uppercase tracking-wider bg-[#191c18] border border-[#7a3030] text-[#fca5a5] hover:bg-[#2a1b1b] transition-colors cursor-pointer flex items-center gap-1.5"
+            title="Reset Queue"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Reset</span>
+          </button>
+
           {/* Secondary Controls Toggle */}
           <button
             onClick={() => setShowSecondaryTools(!showSecondaryTools)}

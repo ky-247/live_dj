@@ -611,10 +611,14 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
       activeInst.pauseVideo();
       setIsPlaying(false);
     } else {
-      activeInst.playVideo();
-      setIsPlaying(true);
+      if (currentTrack && (playerAState.current === -1 || playerBState.current === -1)) {
+        playTrackInstance(currentTrack, false);
+      } else {
+        activeInst.playVideo();
+        setIsPlaying(true);
+      }
     }
-  }, [getActiveInstance, isPlaying, currentTrack, advanceTrack]);
+  }, [getActiveInstance, isPlaying, currentTrack, advanceTrack, playTrackInstance]);
 
   // Handle Volume Change
   const handleVolumeChange = useCallback((newVol: number) => {
