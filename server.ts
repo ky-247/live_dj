@@ -289,53 +289,79 @@ let globalState = {
 };
 
 // Persistence state directory and debounce
-const DATA_DIR = join(__dirname, 'data');
+// Allows explicit override via DATA_DIR environment variable (e.g., if custom mount path is configured on Render)
+const DATA_DIR = process.env.DATA_DIR ? process.env.DATA_DIR.trim() : join(__dirname, 'data');
 const STATE_FILE = join(DATA_DIR, 'state.json');
 const MASTERLIST_FILE = join(DATA_DIR, 'masterlist.json');
 const USER_REQUESTS_FILE = join(DATA_DIR, 'user_requests.json');
+
+console.log(`[Persistence] Initialized with DATA_DIR: ${DATA_DIR}`);
+
+function saveStateSync() {
+  try {
+    if (!existsSync(DATA_DIR)) {
+      mkdirSync(DATA_DIR, { recursive: true });
+    }
+
+    // Serialize client upvotes and guest names for persistent state
+    const upvotesObj: Record<string, string[]> = {};
+    clientUpvotesMap.forEach((set, clientId) => {
+      upvotesObj[clientId] = Array.from(set);
+    });
+
+    const namesObj: Record<string, string> = {};
+    clientNamesMap.forEach((name, clientId) => {
+      namesObj[clientId] = name;
+    });
+
+    const stateToSave = {
+      queue,
+      playedHistory: playedHistory.slice(-200),
+      globalState,
+      clientUpvotesMap: upvotesObj,
+      clientNamesMap: namesObj,
+    };
+    writeFileSync(STATE_FILE, JSON.stringify(stateToSave, null, 2), 'utf-8');
+
+    // Save custom master list tracks so they persist across redeploys
+    const masterTracks = queue.filter(q => q.is_master_list);
+    writeFileSync(MASTERLIST_FILE, JSON.stringify(masterTracks, null, 2), 'utf-8');
+
+    // Save user/guest requested tracks into dedicated user_requests.json for multi-restart persistence
+    const userTracks = queue.filter(q => !q.is_master_list);
+    writeFileSync(USER_REQUESTS_FILE, JSON.stringify(userTracks, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[Persistence] Failed to write state to disk:', err);
+  }
+}
 
 let saveTimeout: NodeJS.Timeout | null = null;
 function scheduleStateSave() {
   if (saveTimeout) return;
   saveTimeout = setTimeout(() => {
     saveTimeout = null;
-    try {
-      if (!existsSync(DATA_DIR)) {
-        mkdirSync(DATA_DIR, { recursive: true });
-      }
-
-      // Serialize client upvotes and guest names for persistent state
-      const upvotesObj: Record<string, string[]> = {};
-      clientUpvotesMap.forEach((set, clientId) => {
-        upvotesObj[clientId] = Array.from(set);
-      });
-
-      const namesObj: Record<string, string> = {};
-      clientNamesMap.forEach((name, clientId) => {
-        namesObj[clientId] = name;
-      });
-
-      const stateToSave = {
-        queue,
-        playedHistory: playedHistory.slice(-200),
-        globalState,
-        clientUpvotesMap: upvotesObj,
-        clientNamesMap: namesObj,
-      };
-      writeFileSync(STATE_FILE, JSON.stringify(stateToSave, null, 2), 'utf-8');
-
-      // Save custom master list tracks so they persist across redeploys
-      const masterTracks = queue.filter(q => q.is_master_list);
-      writeFileSync(MASTERLIST_FILE, JSON.stringify(masterTracks, null, 2), 'utf-8');
-
-      // Save user/guest requested tracks into dedicated user_requests.json for multi-restart persistence
-      const userTracks = queue.filter(q => !q.is_master_list);
-      writeFileSync(USER_REQUESTS_FILE, JSON.stringify(userTracks, null, 2), 'utf-8');
-    } catch (err) {
-      console.error('Failed to save state to data/ files:', err);
-    }
+    saveStateSync();
   }, 1000);
 }
+
+// Graceful shutdown hooks: Ensure any queued state is synchronously written to the persistent disk on restart/redeploy
+process.on('SIGTERM', () => {
+  console.log('[Persistence] SIGTERM received. Flushing pending state to disk...');
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+    saveTimeout = null;
+  }
+  saveStateSync();
+});
+
+process.on('SIGINT', () => {
+  console.log('[Persistence] SIGINT received. Flushing pending state to disk...');
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+    saveTimeout = null;
+  }
+  saveStateSync();
+});
 
 function loadPersistedState() {
   try {
