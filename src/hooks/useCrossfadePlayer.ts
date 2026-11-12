@@ -58,6 +58,7 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
   // Synchronized state refs for 100% video-id and title match
   const currentTrackRef = useRef<QueueItem | null>(null);
   const loadedVideoIdRef = useRef<string | null>(null);
+  const currentTrackStartedAtRef = useRef<number>(Date.now());
 
   // Crossfade, session, and master switch trackers
   const isCrossfadingRef = useRef<boolean>(false);
@@ -154,7 +155,7 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     }
   }, []);
 
-  // Preload upcoming track into idle player
+  // Preload upcoming track into idle player using loadVideoById for immediate stream buffering
   const preloadUpcoming = useCallback(async () => {
     if (!token) return;
     try {
@@ -172,13 +173,13 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
           try {
             idle.mute();
             idle.setVolume(0);
-            idle.cueVideoById({
+            idle.loadVideoById({
               videoId: nextTrack.youtube_id,
               startSeconds: info.startSeconds,
               endSeconds: info.endSeconds,
             });
           } catch (e) {
-            console.warn('Error cueing next track into idle player:', e);
+            console.warn('Error loading next track into idle player:', e);
           }
         }
       }
@@ -197,6 +198,7 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     // Sync refs immediately
     currentTrackRef.current = track;
     loadedVideoIdRef.current = track.youtube_id;
+    currentTrackStartedAtRef.current = Date.now();
 
     setCurrentTrack(track);
     setIsPlaying(true);
@@ -327,7 +329,7 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     };
   }, [playTrackInstance]);
 
-  // Execute crossfade transition between Active and Idle players
+  // Execute true simultaneous dual-deck crossfade transition between Active and Idle players
   const startCrossfade = useCallback(() => {
     if (isCrossfadingRef.current) return;
     const activeInst = getActiveInstance();
@@ -343,12 +345,89 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
     setSwitchNoticeLabel(null);
 
     const targetVol = getTargetVolume();
-    idleInst.setVolume(0);
-    idleInst.unMute();
+    const upSkip = upcomingSkipInfoRef.current || { videoId: '', startSeconds: 10, endSeconds: undefined, source: 'fallback' as const };
 
-    const startFadeRamp = () => {
+    try {
+      idleInst.setVolume(0);
+      idleInst.unMute();
+      idleInst.loadVideoById({
+        videoId: upcomingTrack.youtube_id,
+        startSeconds: upSkip.startSeconds,
+        endSeconds: upSkip.endSeconds,
+      });
+      idleInst.playVideo();
+    } catch (e) {
+      console.warn('Error starting idle player for crossfade:', e);
+    }
+
+    let step = 0;
+    const totalSteps = 50; // 5 seconds in steps of 100ms
+    fadeIntervalRef.current = setInterval(() => {
+      step++;
+      const activeVol = Math.max(0, Math.round(targetVol * (1 - step / totalSteps)));
+      const idleVol = Math.min(targetVol, Math.round(targetVol * (step / totalSteps)));
+
+      try {
+        activeInst.setVolume(activeVol);
+        idleInst.setVolume(idleVol);
+      } catch {}
+
+      if (step >= totalSteps) {
+        clearFades();
+        try {
+          activeInst.stopVideo();
+        } catch {}
+
+        const newActive = activePlayer === 'A' ? 'B' : 'A';
+        const preloaded = upcomingTrack;
+        setActivePlayer(newActive);
+        setCurrentTrack(preloaded);
+        activeSkipInfoRef.current = upcomingSkipInfoRef.current;
+        updateSkipLabel(upcomingSkipInfoRef.current);
+        upcomingSkipInfoRef.current = null;
+        isCrossfadingRef.current = false;
+
+        authFetch('/api/player/advance', {
+          method: 'POST',
+          body: JSON.stringify({ targetTrackId: preloaded.id }),
+        }).then(() => {
+          preloadUpcoming();
+        });
+      }
+    }, 100);
+  }, [activePlayer, getActiveInstance, getIdleInstance, upcomingTrack, getTargetVolume, clearFades, advanceTrack, authFetch, updateSkipLabel, preloadUpcoming]);
+
+  // User manual skip or auto skip (true crossfade into upcoming track if available, else smooth fade out)
+  const handleSkip = useCallback(() => {
+    clearFades();
+    masterSwitchStartTimeRef.current = null;
+    setSwitchNoticeLabel(null);
+    const activeInst = getActiveInstance();
+    const idleInst = getIdleInstance();
+    const targetVol = getTargetVolume();
+
+    if (!activeInst || !isPlaying) {
+      advanceTrack();
+      return;
+    }
+
+    if (upcomingTrack && idleInst) {
+      // Truly crossfade on skip into upcoming track
+      isCrossfadingRef.current = true;
+      const upSkip = upcomingSkipInfoRef.current || { videoId: '', startSeconds: 10, endSeconds: undefined, source: 'fallback' as const };
+      try {
+        idleInst.setVolume(0);
+        idleInst.unMute();
+        idleInst.loadVideoById({
+          videoId: upcomingTrack.youtube_id,
+          startSeconds: upSkip.startSeconds,
+          endSeconds: upSkip.endSeconds,
+        });
+        idleInst.playVideo();
+      } catch {}
+
       let step = 0;
-      const totalSteps = 60; // 6 seconds in steps of 100ms
+      const totalSteps = 20; // 2 seconds crossfade on manual skip
       fadeIntervalRef.current = setInterval(() => {
         step++;
         const activeVol = Math.max(0, Math.round(targetVol * (1 - step / totalSteps)));
@@ -382,51 +461,24 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
           });
         }
       }, 100);
-    };
+    } else {
+      // Standard fade out if no upcoming track
+      let step = 0;
+      const totalSteps = 20; // 2 seconds at 100ms
+      fadeIntervalRef.current = setInterval(() => {
+        step++;
+        const currentVol = Math.max(0, Math.round(targetVol * (1 - step / totalSteps)));
+        try {
+          activeInst.setVolume(currentVol);
+        } catch {}
 
-    try {
-      idleInst.playVideo();
-    } catch {}
-
-    let checkAttempts = 0;
-    const checkPlaying = setInterval(() => {
-      checkAttempts++;
-      const idleState = activePlayer === 'A' ? playerBState.current : playerAState.current;
-      if (idleState === 1 || checkAttempts > 15) {
-        clearInterval(checkPlaying);
-        startFadeRamp();
-      }
-    }, 100);
-  }, [activePlayer, getActiveInstance, getIdleInstance, upcomingTrack, getTargetVolume, clearFades, advanceTrack, authFetch, updateSkipLabel, preloadUpcoming]);
-
-  // User manual skip or auto skip (2-second fade)
-  const handleSkip = useCallback(() => {
-    clearFades();
-    masterSwitchStartTimeRef.current = null;
-    setSwitchNoticeLabel(null);
-    const activeInst = getActiveInstance();
-    const targetVol = getTargetVolume();
-
-    if (!activeInst || !isPlaying) {
-      advanceTrack();
-      return;
+        if (step >= totalSteps) {
+          clearFades();
+          advanceTrack();
+        }
+      }, 100);
     }
-
-    let step = 0;
-    const totalSteps = 20; // 2 seconds at 100ms
-    fadeIntervalRef.current = setInterval(() => {
-      step++;
-      const currentVol = Math.max(0, Math.round(targetVol * (1 - step / totalSteps)));
-      try {
-        activeInst.setVolume(currentVol);
-      } catch {}
-
-      if (step >= totalSteps) {
-        clearFades();
-        advanceTrack();
-      }
-    }, 100);
-  }, [clearFades, getActiveInstance, getTargetVolume, isPlaying, advanceTrack]);
+  }, [clearFades, getActiveInstance, getIdleInstance, getTargetVolume, isPlaying, upcomingTrack, activePlayer, authFetch, updateSkipLabel, preloadUpcoming, advanceTrack]);
 
   // Every 250ms: Check active playback time, max duration rule, switch delay, and 6s end crossfade
   useEffect(() => {
@@ -443,20 +495,40 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
         if (!isPlaying || isCrossfadingRef.current) return;
 
         const currentSettings = settingsRef.current;
-        const isMaster = !!currentTrack?.is_master_list;
+        const activeTrack = currentTrackRef.current || currentTrack;
+        const isMaster = !!activeTrack?.is_master_list;
         const maxGuestSec = currentSettings.maxGuestTrackDurationSeconds ?? 240;
+
+        // Calculate actual seconds played for this track (accounting for start intro skip offset)
+        const trackStartOffset = activeSkipInfoRef.current?.startSeconds || 0;
+        const elapsedPlaySec = Math.max(0, curTime - trackStartOffset);
 
         // RULE 3: Max play duration limit applies ONLY to guest requests (!isMaster)
         // Master list songs can be 1+ hours and will NOT be cut off by max guest duration limit!
-        if (!isMaster && maxGuestSec > 0 && curTime >= maxGuestSec && curTime > 0) {
-          console.log(`Max guest request duration of ${maxGuestSec}s reached. Advancing track...`);
-          handleSkip();
-          return;
+        if (!isMaster && maxGuestSec > 0 && curTime > 0) {
+          const guestTimeRemaining = maxGuestSec - elapsedPlaySec;
+          if (guestTimeRemaining <= 0) {
+            console.log(`Max guest play duration of ${maxGuestSec}s reached (played ${Math.round(elapsedPlaySec)}s). Advancing track...`);
+            setSwitchNoticeLabel(null);
+            handleSkip();
+            return;
+          } else if (guestTimeRemaining <= 15 && isPlaying) {
+            setSwitchNoticeLabel(`Guest play limit • Next track in ${Math.ceil(guestTimeRemaining)}s`);
+          } else if (switchNoticeLabel && switchNoticeLabel.startsWith('Guest play limit')) {
+            setSwitchNoticeLabel(null);
+          }
         }
 
         // RULE 4: Master List to Guest Request Switch Delay
+        // Only count pending guest requests created AFTER the current master track started playing (prevents restart/reset from falsely skipping master songs at 10s)
         if (isMaster && currentSettings.allowGuestPlayback !== false) {
-          const hasPendingGuest = queue.some((q) => q.status === 'pending' && !q.is_master_list);
+          const trackStartTime = currentTrackStartedAtRef.current;
+          const hasPendingGuest = queue.some((q) => 
+            q.status === 'pending' && 
+            !q.is_master_list && 
+            new Date(q.created_at).getTime() > trackStartTime
+          );
+
           if (hasPendingGuest) {
             if (!masterSwitchStartTimeRef.current) {
               masterSwitchStartTimeRef.current = Date.now();
@@ -475,9 +547,11 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
             }
           } else {
             masterSwitchStartTimeRef.current = null;
-            setSwitchNoticeLabel(null);
+            if (switchNoticeLabel && switchNoticeLabel.startsWith('Guest request queued')) {
+              setSwitchNoticeLabel(null);
+            }
           }
-        } else {
+        } else if (switchNoticeLabel && switchNoticeLabel.startsWith('Guest request queued')) {
           masterSwitchStartTimeRef.current = null;
           setSwitchNoticeLabel(null);
         }
@@ -499,7 +573,7 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
         timeCheckIntervalRef.current = null;
       }
     };
-  }, [isPlaying, currentTrack, queue, getActiveInstance, startCrossfade, handleSkip]);
+  }, [isPlaying, currentTrack, queue, getActiveInstance, startCrossfade, handleSkip, switchNoticeLabel]);
 
   // Handle Play / Pause Toggle
   const togglePlayPause = useCallback(() => {
