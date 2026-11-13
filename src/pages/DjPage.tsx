@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Lock, 
   Trash2, 
@@ -95,9 +95,19 @@ export function DjPage() {
   const [lastDeletedTrack, setLastDeletedTrack] = useState<QueueItem | null>(null);
   const [undoTimeoutId, setUndoTimeoutId] = useState<NodeJS.Timeout | null>(null);
 
-  // Drag & drop Master List reordering state
-  const [draggedMasterId, setDraggedMasterId] = useState<string | null>(null);
-  const [dragOverMasterId, setDragOverMasterId] = useState<string | null>(null);
+  // Pointer-based drag & drop Master List reordering state
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [liveMasterOrderIds, setLiveMasterOrderIds] = useState<string[] | null>(null);
+  const masterRowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
+  const dragSessionRef = useRef<{
+    trackId: string;
+    startY: number;
+    threshold: number;
+    isActive: boolean;
+    initialOrderIds: string[];
+    currentOrderIds: string[];
+  } | null>(null);
+  const justDraggedRef = useRef<boolean>(false);
 
   // Check session token on mount
   useEffect(() => {
@@ -519,45 +529,19 @@ export function DjPage() {
     }
   };
 
-  // Handle Master List drag-and-drop reordering
-  const handleMasterDrop = async (targetId: string) => {
-    if (!draggedMasterId || draggedMasterId === targetId) {
-      setDraggedMasterId(null);
-      setDragOverMasterId(null);
-      return;
-    }
-
-    const masterTracks = queue
-      .filter((q) => q.is_master_list)
-      .sort((a, b) => {
-        const aOrder = a.master_order ?? Number.MAX_SAFE_INTEGER;
-        const bOrder = b.master_order ?? Number.MAX_SAFE_INTEGER;
-        if (aOrder !== bOrder) return aOrder - bOrder;
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      });
-
-    const fromIdx = masterTracks.findIndex((t) => t.id === draggedMasterId);
-    const toIdx = masterTracks.findIndex((t) => t.id === targetId);
-    if (fromIdx === -1 || toIdx === -1) {
-      setDraggedMasterId(null);
-      setDragOverMasterId(null);
-      return;
-    }
-
-    const updatedMaster = [...masterTracks];
-    const [moved] = updatedMaster.splice(fromIdx, 1);
-    updatedMaster.splice(toIdx, 0, moved);
-
-    const reorderedWithOrder = updatedMaster.map((t, idx) => ({ ...t, master_order: idx }));
-    const orderedIds = reorderedWithOrder.map((t) => t.id);
+  // Commit reordered Master List IDs to state & backend
+  const commitMasterOrder = useCallback(async (orderedIds: string[]) => {
+    const orderMap = new Map<string, number>();
+    orderedIds.forEach((id, idx) => orderMap.set(id, idx));
 
     // Optimistic local state update
-    setQueue((prev) => {
-      const nonMaster = prev.filter((q) => !q.is_master_list);
-      return [...nonMaster, ...reorderedWithOrder];
-    });
-    setDraggedMasterId(null);
-    setDragOverMasterId(null);
+    setQueue((prev) =>
+      prev.map((item) =>
+        item.is_master_list && orderMap.has(item.id)
+          ? { ...item, master_order: orderMap.get(item.id)! }
+          : item
+      )
+    );
 
     try {
       const res = await djFetch('/api/admin/masterlist/reorder', {
@@ -572,7 +556,83 @@ export function DjPage() {
     } catch {
       showToast('Network error saving Master List order');
     }
-  };
+  }, [djFetch]);
+
+  // Global pointer listeners for smooth Master List drag & drop
+  useEffect(() => {
+    const handlePointerMove = (e: PointerEvent) => {
+      const session = dragSessionRef.current;
+      if (!session) return;
+
+      if (!session.isActive) {
+        if (Math.abs(e.clientY - session.startY) < session.threshold) {
+          return;
+        }
+        session.isActive = true;
+        setActiveDragId(session.trackId);
+        setLiveMasterOrderIds(session.currentOrderIds);
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'grabbing';
+      }
+
+      const otherIds = session.currentOrderIds.filter((id) => id !== session.trackId);
+      let targetIdx = 0;
+      for (const id of otherIds) {
+        const el = masterRowRefs.current.get(id);
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        const centerY = rect.top + rect.height / 2;
+        if (centerY < e.clientY) {
+          targetIdx++;
+        }
+      }
+
+      const currentIdx = session.currentOrderIds.indexOf(session.trackId);
+      if (currentIdx !== -1 && targetIdx !== currentIdx) {
+        const nextOrder = [...otherIds];
+        nextOrder.splice(targetIdx, 0, session.trackId);
+        session.currentOrderIds = nextOrder;
+        setLiveMasterOrderIds(nextOrder);
+      }
+    };
+
+    const finishDrag = () => {
+      const session = dragSessionRef.current;
+      if (!session) return;
+      dragSessionRef.current = null;
+
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+
+      if (session.isActive) {
+        justDraggedRef.current = true;
+        setTimeout(() => {
+          justDraggedRef.current = false;
+        }, 120);
+
+        const changed = session.currentOrderIds.some(
+          (id, idx) => id !== session.initialOrderIds[idx]
+        );
+        if (changed) {
+          commitMasterOrder(session.currentOrderIds);
+        }
+      }
+
+      setActiveDragId(null);
+      setLiveMasterOrderIds(null);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', finishDrag);
+    window.addEventListener('pointercancel', finishDrag);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', finishDrag);
+      window.removeEventListener('pointercancel', finishDrag);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+  }, [commitMasterOrder]);
 
   // Sorted queue items
   const nowPlaying = queue.find((q) => q.status === 'playing') || null;
@@ -602,6 +662,11 @@ export function DjPage() {
       ? sortQueue(rawFiltered, true, localSettings.allowGuestPlayback ?? true)
       : queueViewTab === 'master'
         ? [...rawFiltered].sort((a, b) => {
+            if (liveMasterOrderIds) {
+              const aLive = liveMasterOrderIds.indexOf(a.id);
+              const bLive = liveMasterOrderIds.indexOf(b.id);
+              if (aLive !== -1 && bLive !== -1) return aLive - bLive;
+            }
             const aOrder = a.master_order ?? Number.MAX_SAFE_INTEGER;
             const bOrder = b.master_order ?? Number.MAX_SAFE_INTEGER;
             if (aOrder !== bOrder) return aOrder - bOrder;
@@ -1437,55 +1502,59 @@ export function DjPage() {
               <tbody className="divide-y divide-[#44493e]/60">
                 {displayedQueue.map((track, idx) => {
                   const canDragMaster = queueViewTab === 'master' && !filterSearch;
-                  const isDragged = draggedMasterId === track.id;
-                  const isDragTarget = dragOverMasterId === track.id && draggedMasterId !== track.id;
+                  const isDragged = activeDragId === track.id;
                   return (
                   <tr
                     key={track.id}
-                    draggable={canDragMaster}
-                    onDragStart={(e) => {
-                      if (!canDragMaster) return;
-                      setDraggedMasterId(track.id);
-                      e.dataTransfer.effectAllowed = 'move';
-                      e.dataTransfer.setData('text/plain', track.id);
-                    }}
-                    onDragOver={(e) => {
-                      if (!canDragMaster) return;
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = 'move';
-                      if (dragOverMasterId !== track.id) {
-                        setDragOverMasterId(track.id);
+                    ref={(el) => {
+                      if (el) {
+                        masterRowRefs.current.set(track.id, el);
+                      } else {
+                        masterRowRefs.current.delete(track.id);
                       }
                     }}
-                    onDragLeave={() => {
-                      if (dragOverMasterId === track.id) {
-                        setDragOverMasterId(null);
-                      }
-                    }}
-                    onDrop={(e) => {
+                    draggable={false}
+                    onDragStart={(e) => e.preventDefault()}
+                    onPointerDown={(e) => {
                       if (!canDragMaster) return;
-                      e.preventDefault();
-                      handleMasterDrop(track.id);
+                      if (e.pointerType === 'mouse' && e.button !== 0) return;
+                      const target = e.target as HTMLElement;
+                      if (target.closest('button, a, input, select, textarea')) return;
+
+                      const isHandle = !!target.closest('[data-drag-handle]');
+                      const initialOrderIds = displayedQueue.map((item) => item.id);
+                      dragSessionRef.current = {
+                        trackId: track.id,
+                        startY: e.clientY,
+                        threshold: isHandle ? 2 : 5,
+                        isActive: false,
+                        initialOrderIds,
+                        currentOrderIds: initialOrderIds,
+                      };
                     }}
-                    onDragEnd={() => {
-                      setDraggedMasterId(null);
-                      setDragOverMasterId(null);
+                    onDoubleClick={() => {
+                      if (justDraggedRef.current) return;
+                      handlePlayNow(track);
                     }}
-                    onDoubleClick={() => handlePlayNow(track)}
                     title={canDragMaster ? 'Drag to reorder • Double-click to play immediately' : 'Double-click to play song immediately'}
                     className={`hover:bg-[#191c18]/80 transition-colors ${
-                      canDragMaster ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                      canDragMaster ? 'cursor-grab active:cursor-grabbing select-none' : 'cursor-pointer'
                     } ${
                       track.status === 'playing' ? 'bg-[#191c18]/90 border-l-2 border-[#dfed66]' : ''
-                    } ${isDragged ? 'opacity-40' : ''} ${
-                      isDragTarget ? 'border-t-2 border-t-[#dfed66] bg-[#dfed66]/10' : ''
+                    } ${
+                      isDragged
+                        ? 'bg-[#dfed66]/15 outline outline-1 outline-[#dfed66] touch-none'
+                        : ''
                     }`}
                   >
                     {/* Index Column */}
-                    <td className="py-2.5 px-4 text-center text-[#aeb3a5]">
+                    <td
+                      data-drag-handle={canDragMaster ? 'true' : undefined}
+                      className={`py-2.5 px-4 text-center text-[#aeb3a5] ${canDragMaster ? 'touch-none' : ''}`}
+                    >
                       <div className="flex items-center justify-center gap-1">
                         {canDragMaster && (
-                          <GripVertical className="w-3.5 h-3.5 text-[#aeb3a5]/70 shrink-0" />
+                          <GripVertical className="w-3.5 h-3.5 text-[#dfed66]/80 shrink-0" />
                         )}
                         {track.is_pinned ? (
                           <span className="text-[#dfed66] font-bold">VIP</span>
@@ -1501,7 +1570,8 @@ export function DjPage() {
                         <img
                           src={track.thumbnail_url}
                           alt={track.title}
-                          className="w-10 h-7 object-cover rounded-xs border border-[#44493e] shrink-0"
+                          draggable={false}
+                          className="w-10 h-7 object-cover rounded-xs border border-[#44493e] shrink-0 pointer-events-none select-none"
                         />
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
