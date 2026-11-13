@@ -21,7 +21,8 @@ import {
   ChevronUp,
   Plus,
   ListMusic,
-  Clock
+  Clock,
+  GripVertical
 } from 'lucide-react';
 import { QueueItem, GlobalState, DjSettings, PartyContributor } from '../types';
 import { socket } from '../lib/socket';
@@ -40,6 +41,7 @@ const defaultSettings: DjSettings = {
   fallbackSkipSeconds: 10,
   allowGuestPlayback: true,
   maxGuestTrackDurationSeconds: 240,
+  maxMasterTrackDurationSeconds: 240,
   masterToRequestSwitchDelaySeconds: 10,
 };
 
@@ -92,6 +94,10 @@ export function DjPage() {
   // Undo support
   const [lastDeletedTrack, setLastDeletedTrack] = useState<QueueItem | null>(null);
   const [undoTimeoutId, setUndoTimeoutId] = useState<NodeJS.Timeout | null>(null);
+
+  // Drag & drop Master List reordering state
+  const [draggedMasterId, setDraggedMasterId] = useState<string | null>(null);
+  const [dragOverMasterId, setDragOverMasterId] = useState<string | null>(null);
 
   // Check session token on mount
   useEffect(() => {
@@ -288,13 +294,14 @@ export function DjPage() {
   };
 
   const handleResetQueue = async () => {
-    if (!window.confirm('Reset the entire queue back to master list? All pending guest requests will be removed.')) {
+    if (!window.confirm('Reset the queue? Both Master List and Guest Requests will be kept and set back to pending (deleted tracks stay deleted).')) {
       return;
     }
     try {
       const res = await djFetch('/api/admin/reset', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        showToast('Queue successfully reset');
+        showToast(data.message || 'Queue successfully reset');
       }
     } catch {
       showToast('Failed to reset queue');
@@ -512,9 +519,64 @@ export function DjPage() {
     }
   };
 
+  // Handle Master List drag-and-drop reordering
+  const handleMasterDrop = async (targetId: string) => {
+    if (!draggedMasterId || draggedMasterId === targetId) {
+      setDraggedMasterId(null);
+      setDragOverMasterId(null);
+      return;
+    }
+
+    const masterTracks = queue
+      .filter((q) => q.is_master_list)
+      .sort((a, b) => {
+        const aOrder = a.master_order ?? Number.MAX_SAFE_INTEGER;
+        const bOrder = b.master_order ?? Number.MAX_SAFE_INTEGER;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+
+    const fromIdx = masterTracks.findIndex((t) => t.id === draggedMasterId);
+    const toIdx = masterTracks.findIndex((t) => t.id === targetId);
+    if (fromIdx === -1 || toIdx === -1) {
+      setDraggedMasterId(null);
+      setDragOverMasterId(null);
+      return;
+    }
+
+    const updatedMaster = [...masterTracks];
+    const [moved] = updatedMaster.splice(fromIdx, 1);
+    updatedMaster.splice(toIdx, 0, moved);
+
+    const reorderedWithOrder = updatedMaster.map((t, idx) => ({ ...t, master_order: idx }));
+    const orderedIds = reorderedWithOrder.map((t) => t.id);
+
+    // Optimistic local state update
+    setQueue((prev) => {
+      const nonMaster = prev.filter((q) => !q.is_master_list);
+      return [...nonMaster, ...reorderedWithOrder];
+    });
+    setDraggedMasterId(null);
+    setDragOverMasterId(null);
+
+    try {
+      const res = await djFetch('/api/admin/masterlist/reorder', {
+        method: 'POST',
+        body: JSON.stringify({ orderedIds }),
+      });
+      if (res.ok) {
+        showToast('Master List order updated');
+      } else {
+        showToast('Failed to save Master List order');
+      }
+    } catch {
+      showToast('Network error saving Master List order');
+    }
+  };
+
   // Sorted queue items
   const nowPlaying = queue.find((q) => q.status === 'playing') || null;
-  const pendingTracks = sortQueue(queue, localSettings.allowGuestPlayback ?? true);
+  const pendingTracks = sortQueue(queue, true, localSettings.allowGuestPlayback ?? true);
   const upNext = pendingTracks[0] || null;
 
   // Filtered view items
@@ -535,9 +597,17 @@ export function DjPage() {
       );
     });
 
-  const displayedQueue = queueViewTab === 'pending'
-    ? sortQueue(rawFiltered, localSettings.allowGuestPlayback ?? true)
-    : rawFiltered;
+  const displayedQueue =
+    queueViewTab === 'pending'
+      ? sortQueue(rawFiltered, true, localSettings.allowGuestPlayback ?? true)
+      : queueViewTab === 'master'
+        ? [...rawFiltered].sort((a, b) => {
+            const aOrder = a.master_order ?? Number.MAX_SAFE_INTEGER;
+            const bOrder = b.master_order ?? Number.MAX_SAFE_INTEGER;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          })
+        : rawFiltered;
 
   // PIN PROTECTION MODAL OVERLAY
   if (!isAuthenticated) {
@@ -969,6 +1039,33 @@ export function DjPage() {
               <p className="font-mono text-[11px] text-[#aeb3a5]">Max guest song duration (0 = unlimited). Does NOT apply to Master List songs!</p>
             </div>
 
+            {/* Max Master Track Duration (for songs <= 10 mins) */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between font-mono text-xs">
+                <span className="text-[#aeb3a5]">Max Master Play Time</span>
+                <span className="text-[#dfed66] font-bold">
+                  {localSettings.maxMasterTrackDurationSeconds
+                    ? `${localSettings.maxMasterTrackDurationSeconds}s (${(localSettings.maxMasterTrackDurationSeconds / 60).toFixed(localSettings.maxMasterTrackDurationSeconds % 60 === 0 ? 0 : 1)}m)`
+                    : 'Full Song'}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="600"
+                step="30"
+                value={localSettings.maxMasterTrackDurationSeconds ?? 240}
+                onChange={(e) =>
+                  setLocalSettings({
+                    ...localSettings,
+                    maxMasterTrackDurationSeconds: parseInt(e.target.value, 10),
+                  })
+                }
+                className="w-full accent-[#dfed66] cursor-pointer"
+              />
+              <p className="font-mono text-[11px] text-[#aeb3a5]">For Master songs ≤ 10 mins (0 = full song). Songs &gt; 10 mins always play in full!</p>
+            </div>
+
             {/* Master-to-Request Switch Delay */}
             <div className="space-y-1.5">
               <div className="flex justify-between font-mono text-xs">
@@ -1292,26 +1389,36 @@ export function DjPage() {
 
         {/* Master List Addition Bar */}
         {queueViewTab === 'master' && (
-          <form onSubmit={handleAddMasterList} className="p-3 bg-[#191c18] border-b border-[#44493e] flex flex-col sm:flex-row gap-2 items-center">
-            <div className="font-mono text-xs text-[#dfed66] font-bold uppercase tracking-wider whitespace-nowrap flex items-center gap-1.5">
-              <Plus className="w-4 h-4 text-[#dfed66]" />
-              <span>Add to Master List:</span>
+          <div className="bg-[#191c18] border-b border-[#44493e]">
+            <form onSubmit={handleAddMasterList} className="p-3 flex flex-col sm:flex-row gap-2 items-center">
+              <div className="font-mono text-xs text-[#dfed66] font-bold uppercase tracking-wider whitespace-nowrap flex items-center gap-1.5">
+                <Plus className="w-4 h-4 text-[#dfed66]" />
+                <span>Add to Master List:</span>
+              </div>
+              <input
+                type="text"
+                placeholder="Paste YouTube URL or video ID (e.g., https://youtube.com/watch?v=...)"
+                value={newMasterUrl}
+                onChange={(e) => setNewMasterUrl(e.target.value)}
+                className="flex-1 bg-[#22251f] border border-[#44493e] rounded-sm px-3 py-1.5 text-xs font-mono text-[#efefdf] placeholder-[#aeb3a5]/50 focus:outline-none focus:border-[#dfed66]"
+              />
+              <button
+                type="submit"
+                disabled={isAddingMaster || !newMasterUrl.trim()}
+                className="px-3.5 py-1.5 rounded-sm bg-[#dfed66] hover:bg-[#d2e057] text-[#191c18] font-mono text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+              >
+                {isAddingMaster ? 'Adding...' : 'Add Master Track'}
+              </button>
+            </form>
+            <div className="px-3 pb-2 font-mono text-[11px] text-[#aeb3a5] flex items-center gap-1.5">
+              <GripVertical className="w-3.5 h-3.5 text-[#dfed66]" />
+              <span>
+                {filterSearch
+                  ? 'Clear search filter to drag & reorder Master List tracks.'
+                  : 'Drag and drop rows to change Master List playback order.'}
+              </span>
             </div>
-            <input
-              type="text"
-              placeholder="Paste YouTube URL or video ID (e.g., https://youtube.com/watch?v=...)"
-              value={newMasterUrl}
-              onChange={(e) => setNewMasterUrl(e.target.value)}
-              className="flex-1 bg-[#22251f] border border-[#44493e] rounded-sm px-3 py-1.5 text-xs font-mono text-[#efefdf] placeholder-[#aeb3a5]/50 focus:outline-none focus:border-[#dfed66]"
-            />
-            <button
-              type="submit"
-              disabled={isAddingMaster || !newMasterUrl.trim()}
-              className="px-3.5 py-1.5 rounded-sm bg-[#dfed66] hover:bg-[#d2e057] text-[#191c18] font-mono text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 disabled:opacity-50"
-            >
-              {isAddingMaster ? 'Adding...' : 'Add Master Track'}
-            </button>
-          </form>
+          </div>
         )}
 
         {/* Tab 1, 2 & Master: Compact Running-Order Table */}
@@ -1320,7 +1427,7 @@ export function DjPage() {
             <table className="w-full text-left font-mono text-xs">
               <thead>
                 <tr className="bg-[#191c18] border-b border-[#44493e] text-[#aeb3a5]">
-                  <th className="py-2.5 px-4 w-12 text-center">#</th>
+                  <th className="py-2.5 px-4 w-14 text-center">#</th>
                   <th className="py-2.5 px-4">TRACK</th>
                   <th className="py-2.5 px-4 w-44">REQUESTED BY</th>
                   <th className="py-2.5 px-4 w-24 text-right">VOTES</th>
@@ -1328,22 +1435,64 @@ export function DjPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#44493e]/60">
-                {displayedQueue.map((track, idx) => (
+                {displayedQueue.map((track, idx) => {
+                  const canDragMaster = queueViewTab === 'master' && !filterSearch;
+                  const isDragged = draggedMasterId === track.id;
+                  const isDragTarget = dragOverMasterId === track.id && draggedMasterId !== track.id;
+                  return (
                   <tr
                     key={track.id}
+                    draggable={canDragMaster}
+                    onDragStart={(e) => {
+                      if (!canDragMaster) return;
+                      setDraggedMasterId(track.id);
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData('text/plain', track.id);
+                    }}
+                    onDragOver={(e) => {
+                      if (!canDragMaster) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      if (dragOverMasterId !== track.id) {
+                        setDragOverMasterId(track.id);
+                      }
+                    }}
+                    onDragLeave={() => {
+                      if (dragOverMasterId === track.id) {
+                        setDragOverMasterId(null);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      if (!canDragMaster) return;
+                      e.preventDefault();
+                      handleMasterDrop(track.id);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedMasterId(null);
+                      setDragOverMasterId(null);
+                    }}
                     onDoubleClick={() => handlePlayNow(track)}
-                    title="Double-click to play song immediately"
-                    className={`hover:bg-[#191c18]/80 cursor-pointer transition-colors ${
+                    title={canDragMaster ? 'Drag to reorder • Double-click to play immediately' : 'Double-click to play song immediately'}
+                    className={`hover:bg-[#191c18]/80 transition-colors ${
+                      canDragMaster ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                    } ${
                       track.status === 'playing' ? 'bg-[#191c18]/90 border-l-2 border-[#dfed66]' : ''
+                    } ${isDragged ? 'opacity-40' : ''} ${
+                      isDragTarget ? 'border-t-2 border-t-[#dfed66] bg-[#dfed66]/10' : ''
                     }`}
                   >
                     {/* Index Column */}
                     <td className="py-2.5 px-4 text-center text-[#aeb3a5]">
-                      {track.is_pinned ? (
-                        <span className="text-[#dfed66] font-bold">VIP</span>
-                      ) : (
-                        (idx + 1).toString().padStart(2, '0')
-                      )}
+                      <div className="flex items-center justify-center gap-1">
+                        {canDragMaster && (
+                          <GripVertical className="w-3.5 h-3.5 text-[#aeb3a5]/70 shrink-0" />
+                        )}
+                        {track.is_pinned ? (
+                          <span className="text-[#dfed66] font-bold">VIP</span>
+                        ) : (
+                          <span>{(idx + 1).toString().padStart(2, '0')}</span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Track Info */}
@@ -1426,7 +1575,8 @@ export function DjPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
 
                 {displayedQueue.length === 0 && (
                   <tr>

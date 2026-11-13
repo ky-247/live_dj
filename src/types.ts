@@ -14,6 +14,7 @@ export interface QueueItem {
   client_id?: string;
   played_at?: string;
   vibe_tag?: string;
+  master_order?: number;
 }
 
 export interface DjSettings {
@@ -29,6 +30,7 @@ export interface DjSettings {
   fallbackSkipSeconds: number;
   allowGuestPlayback: boolean; // Controls whether guest requested list is played or only master list
   maxGuestTrackDurationSeconds: number; // Max seconds a guest request can play before advancing (0 = no limit; does NOT apply to master list)
+  maxMasterTrackDurationSeconds: number; // Max seconds a master list track <= 10 mins can play (0 = no limit; tracks > 10 mins always play in full)
   masterToRequestSwitchDelaySeconds: number; // Delay in seconds before switching from master track to newly arrived guest request
 }
 

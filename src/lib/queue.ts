@@ -33,6 +33,13 @@ export function sortQueue(
       }
     }
 
+    // For Master List tracks, honor DJ drag-and-drop master_order if set
+    if (aMaster && bMaster) {
+      const aOrder = a.master_order ?? Number.MAX_SAFE_INTEGER;
+      const bOrder = b.master_order ?? Number.MAX_SAFE_INTEGER;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+    }
+
     // 3. Highest upvoted first
     if (b.upvotes !== a.upvotes) return b.upvotes - a.upvotes;
 

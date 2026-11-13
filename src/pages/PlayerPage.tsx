@@ -541,7 +541,7 @@ export function PlayerPage() {
 
             <button
               onClick={async () => {
-                if (!window.confirm('Reset the entire queue back to master list? All pending guest requests will be removed.')) {
+                if (!window.confirm('Reset the queue? Both Master List and Guest Requests will be kept and set back to pending (deleted tracks stay deleted).')) {
                   return;
                 }
                 try {

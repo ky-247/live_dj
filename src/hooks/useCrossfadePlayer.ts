@@ -29,6 +29,7 @@ const defaultSettings: DjSettings = {
   fallbackSkipSeconds: 10,
   allowGuestPlayback: true,
   maxGuestTrackDurationSeconds: 240,
+  maxMasterTrackDurationSeconds: 240,
   masterToRequestSwitchDelaySeconds: 10,
 };
 
@@ -543,13 +544,13 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
         const activeTrack = currentTrackRef.current || currentTrack;
         const isMaster = !!activeTrack?.is_master_list;
         const maxGuestSec = currentSettings.maxGuestTrackDurationSeconds ?? 240;
+        const maxMasterSec = currentSettings.maxMasterTrackDurationSeconds ?? 240;
 
         // Calculate actual seconds played for this track (accounting for start intro skip offset)
         const trackStartOffset = activeSkipInfoRef.current?.startSeconds || 0;
         const elapsedPlaySec = Math.max(0, curTime - trackStartOffset);
 
-        // RULE 3: Max play duration limit applies ONLY to guest requests (!isMaster)
-        // Master list songs can be 1+ hours and will NOT be cut off by max guest duration limit!
+        // RULE 3A: Max play duration limit for guest requests (!isMaster)
         if (!isMaster && maxGuestSec > 0 && curTime > 0) {
           const guestTimeRemaining = maxGuestSec - elapsedPlaySec;
           if (guestTimeRemaining <= 0) {
@@ -562,6 +563,29 @@ export function useCrossfadePlayer({ token, onUnauthorized, queue }: UseCrossfad
           } else if (switchNoticeLabel && switchNoticeLabel.startsWith('Guest play limit')) {
             setSwitchNoticeLabel(null);
           }
+        }
+
+        // RULE 3B: Max play duration limit for Master List tracks <= 10 mins (600s)
+        // If a master track is longer than 10 minutes (dur > 600), play the entire song!
+        if (isMaster) {
+          const isShortMasterTrack = typeof dur === 'number' && dur > 0 && dur <= 600;
+          if (isShortMasterTrack && maxMasterSec > 0 && curTime > 0) {
+            const masterTimeRemaining = maxMasterSec - elapsedPlaySec;
+            if (masterTimeRemaining <= 0) {
+              console.log(`Max master play duration of ${maxMasterSec}s reached (track dur ${Math.round(dur)}s <= 600s, played ${Math.round(elapsedPlaySec)}s). Advancing track...`);
+              setSwitchNoticeLabel(null);
+              handleSkip();
+              return;
+            } else if (masterTimeRemaining <= 15 && isPlaying && !switchNoticeLabel?.startsWith('Guest request queued')) {
+              setSwitchNoticeLabel(`Master play limit • Next track in ${Math.ceil(masterTimeRemaining)}s`);
+            } else if (switchNoticeLabel && switchNoticeLabel.startsWith('Master play limit')) {
+              setSwitchNoticeLabel(null);
+            }
+          } else if (switchNoticeLabel && switchNoticeLabel.startsWith('Master play limit')) {
+            setSwitchNoticeLabel(null);
+          }
+        } else if (switchNoticeLabel && switchNoticeLabel.startsWith('Master play limit')) {
+          setSwitchNoticeLabel(null);
         }
 
         // RULE 4: Master List to Guest Request Switch Delay

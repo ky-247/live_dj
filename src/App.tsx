@@ -28,6 +28,7 @@ const defaultState: GlobalState = {
     fallbackSkipSeconds: 10,
     allowGuestPlayback: true,
     maxGuestTrackDurationSeconds: 240,
+    maxMasterTrackDurationSeconds: 240,
     masterToRequestSwitchDelaySeconds: 10,
   },
 };

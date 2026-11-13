@@ -71,14 +71,44 @@ export function RequestPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Quick-Pick Radio Favourites (Curated party staples)
+  // Quick-Pick Radio Favourites (Curated party staples with explicit video IDs for exact playback)
   const quickSuggestions = [
-    { title: 'Tauba Tauba', query: 'Tauba Tauba' },
-    { title: 'Kala Chashma', query: 'Kala Chashma' },
-    { title: 'Chaleya', query: 'Chaleya' },
-    { title: 'Mundian To Bach Ke', query: 'Mundian To Bach Ke' },
-    { title: 'Jhoome Jo Pathaan', query: 'Jhoome Jo Pathaan' },
-    { title: 'Brown Munde', query: 'Brown Munde' }
+    {
+      videoId: 'RLzC55ai0eo',
+      title: 'Tauba Tauba | Bad Newz | Vicky Kaushal, Triptii Dimri | Karan Aujla',
+      channelTitle: 'Saregama Music',
+      thumbnailUrl: 'https://i.ytimg.com/vi/RLzC55ai0eo/hqdefault.jpg'
+    },
+    {
+      videoId: 'kw4tT7SCmaY',
+      title: 'Kala Chashma | Baar Baar Dekho | Sidharth M, Katrina K | Badshah, Neha Kakkar',
+      channelTitle: 'Zee Music Company',
+      thumbnailUrl: 'https://i.ytimg.com/vi/kw4tT7SCmaY/hqdefault.jpg'
+    },
+    {
+      videoId: 'v_z4-ZkFfzw',
+      title: 'Chaleya | Jawan | Shah Rukh Khan | Nayanthara | Anirudh, Arijit Singh',
+      channelTitle: 'T-Series',
+      thumbnailUrl: 'https://i.ytimg.com/vi/v_z4-ZkFfzw/hqdefault.jpg'
+    },
+    {
+      videoId: 'OqEC6h7nFfM',
+      title: 'Mundian To Bach Ke (The Dhol Club Remix) | Panjabi MC',
+      channelTitle: 'Panjabi MC Official',
+      thumbnailUrl: 'https://i.ytimg.com/vi/OqEC6h7nFfM/hqdefault.jpg'
+    },
+    {
+      videoId: 'YxWlaYCA8MU',
+      title: 'Jhoome Jo Pathaan | Shah Rukh Khan, Deepika Padukone | Arijit Singh',
+      channelTitle: 'YRF',
+      thumbnailUrl: 'https://i.ytimg.com/vi/YxWlaYCA8MU/hqdefault.jpg'
+    },
+    {
+      videoId: 'V7LwfY5U5WI',
+      title: 'Brown Munde | AP Dhillon, Gurinder Gill, Shinda Kahlon',
+      channelTitle: 'Run-Up Records',
+      thumbnailUrl: 'https://i.ytimg.com/vi/V7LwfY5U5WI/hqdefault.jpg'
+    }
   ];
 
   const triggerHaptic = (pattern: number | number[] = 25) => {
@@ -823,15 +853,22 @@ export function RequestPage() {
                     <div className="flex flex-wrap gap-1.5">
                       {quickSuggestions.map((item) => (
                         <button
-                          key={item.query}
+                          key={item.videoId}
                           type="button"
                           onClick={() => {
-                            setInputQuery(item.query);
-                            handleSearchOrResolve(undefined, item.query);
+                            setSelectedTrack({
+                              videoId: item.videoId,
+                              title: item.title,
+                              channelTitle: item.channelTitle,
+                              thumbnailUrl: item.thumbnailUrl,
+                            });
+                            setSearchResults([]);
+                            setInputQuery('');
+                            triggerHaptic(30);
                           }}
                           className="px-2.5 py-1.5 rounded-sm bg-white border border-[#d8d8c6] hover:border-[#191c18] text-xs font-mono text-[#191c18] transition-colors cursor-pointer"
                         >
-                          + {item.title}
+                          + {item.title.split('|')[0].trim()}
                         </button>
                       ))}
                     </div>

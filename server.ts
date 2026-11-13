@@ -56,6 +56,7 @@ interface QueueTrack {
   client_id?: string;
   played_at?: string;
   vibe_tag?: string;
+  master_order?: number;
 }
 
 interface DjSettings {
@@ -71,6 +72,7 @@ interface DjSettings {
   fallbackSkipSeconds: number;
   allowGuestPlayback?: boolean;
   maxGuestTrackDurationSeconds?: number;
+  maxMasterTrackDurationSeconds?: number;
   masterToRequestSwitchDelaySeconds?: number;
 }
 
@@ -231,6 +233,7 @@ let globalState = {
     fallbackSkipSeconds: 10,
     allowGuestPlayback: true,
     maxGuestTrackDurationSeconds: 240,
+    maxMasterTrackDurationSeconds: 240,
     masterToRequestSwitchDelaySeconds: 10,
   } as DjSettings
 };
@@ -845,13 +848,15 @@ app.put('/api/queue/:id/status', requireDj, (req, res) => {
   }
 });
 
-// 6. Delete Track - DJ ONLY
+// 6. Delete Track - DJ ONLY (Permanent delete synced immediately to disk)
 app.delete('/api/queue/:id', requireDj, (req, res) => {
   const id = String(req.params.id);
   if (globalState.nowPlayingTrackId === id) {
     globalState.nowPlayingTrackId = null;
+    io.emit('track-playing-changed', { track: null });
   }
   queue = queue.filter(q => q.id !== id);
+  saveStateSync();
   emitQueueUpdate();
   emitStateUpdate();
   res.json({ success: true });
@@ -866,6 +871,7 @@ app.post('/api/queue/restore', requireDj, (req, res) => {
   const exists = queue.some(q => q.id === track.id);
   if (!exists) {
     queue.push(track);
+    saveStateSync();
     emitQueueUpdate();
     emitStateUpdate();
   }
@@ -1031,6 +1037,12 @@ app.post(['/api/admin/masterlist', '/api/masterlist'], requireDj, async (req, re
     return res.status(400).json({ error: 'Valid YouTube URL, Video ID, or Song Title is required.' });
   }
 
+  const existingMaster = queue.filter(q => q.is_master_list);
+  const maxOrder = existingMaster.reduce(
+    (max, q, idx) => Math.max(max, typeof q.master_order === 'number' ? q.master_order : idx),
+    -1
+  );
+
   const newMasterTrack: QueueTrack = {
     id: `master-custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     created_at: new Date().toISOString(),
@@ -1042,10 +1054,11 @@ app.post(['/api/admin/masterlist', '/api/masterlist'], requireDj, async (req, re
     upvotes: 0,
     is_master_list: true,
     status: 'pending',
+    master_order: maxOrder + 1,
   };
 
   queue.push(newMasterTrack);
-  scheduleStateSave();
+  saveStateSync();
   emitQueueUpdate();
   emitStateUpdate();
 
@@ -1055,6 +1068,43 @@ app.post(['/api/admin/masterlist', '/api/masterlist'], requireDj, async (req, re
     track: newMasterTrack,
     message: 'Song added to Master List and persisted across redeploys!'
   });
+});
+
+// POST /api/admin/masterlist/reorder (DJ only): Reorders Master List tracks via drag & drop
+app.post('/api/admin/masterlist/reorder', requireDj, (req, res) => {
+  const { orderedIds } = req.body || {};
+  if (!Array.isArray(orderedIds)) {
+    return res.status(400).json({ error: 'orderedIds array is required' });
+  }
+
+  const masterTracks = queue.filter(q => q.is_master_list);
+  const nonMasterTracks = queue.filter(q => !q.is_master_list);
+  const masterMap = new Map(masterTracks.map(t => [t.id, t]));
+
+  const reorderedMaster: QueueTrack[] = [];
+  const seen = new Set<string>();
+
+  for (const id of orderedIds) {
+    const track = masterMap.get(String(id));
+    if (track && !seen.has(track.id)) {
+      reorderedMaster.push({ ...track, master_order: reorderedMaster.length });
+      seen.add(track.id);
+    }
+  }
+
+  // Append any remaining master tracks not included in orderedIds
+  for (const track of masterTracks) {
+    if (!seen.has(track.id)) {
+      reorderedMaster.push({ ...track, master_order: reorderedMaster.length });
+    }
+  }
+
+  queue = [...nonMasterTracks, ...reorderedMaster];
+  saveStateSync();
+  emitQueueUpdate();
+  emitStateUpdate();
+
+  res.json({ success: true, count: reorderedMaster.length });
 });
 
 // POST /api/queue/restart-playlist (DJ only): Restarts playlist from played history (includes both masterlist and requested songs)
@@ -1223,6 +1273,9 @@ app.post(['/api/admin/settings', '/api/settings'], requireDj, (req, res) => {
     if (typeof settings.maxGuestTrackDurationSeconds === 'number') {
       settings.maxGuestTrackDurationSeconds = Math.max(0, Math.min(1800, Math.round(settings.maxGuestTrackDurationSeconds)));
     }
+    if (typeof settings.maxMasterTrackDurationSeconds === 'number') {
+      settings.maxMasterTrackDurationSeconds = Math.max(0, Math.min(1800, Math.round(settings.maxMasterTrackDurationSeconds)));
+    }
     if (typeof settings.masterToRequestSwitchDelaySeconds === 'number') {
       settings.masterToRequestSwitchDelaySeconds = Math.max(0, Math.min(60, Math.round(settings.masterToRequestSwitchDelaySeconds)));
     }
@@ -1276,42 +1329,30 @@ app.post('/api/admin/change-pin', requireDj, (req, res) => {
   res.json({ success: true, message: 'DJ PIN updated successfully' });
 });
 
-// Reset Queue - DJ ONLY (Resets queue back to Master List in masterlist.json, clears guest requests and history)
+// Reset Queue - DJ ONLY (Keeps both Master List and Guest Requested songs, resets status back to pending; permanently deleted tracks stay deleted)
 app.post(['/api/admin/reset', '/api/queue/reset'], requireDj, (req, res) => {
-  let masterTracks: QueueTrack[] = [];
-  if (existsSync(MASTERLIST_FILE)) {
-    try {
-      const masterContent = readFileSync(MASTERLIST_FILE, 'utf-8');
-      const saved: QueueTrack[] = JSON.parse(masterContent);
-      if (Array.isArray(saved)) {
-        masterTracks = saved.filter(t => t.is_master_list);
-      }
-    } catch {}
-  }
-
-  const freshMasterTracks = masterTracks.map(t => ({
+  queue = queue.map(t => ({
     ...t,
     status: 'pending' as const,
     played_at: undefined,
+    is_pinned: false,
   }));
 
-  queue = freshMasterTracks;
   playedHistory = [];
   clientLastRequestTime.clear();
   clientUpvotesMap.clear();
   globalState.nowPlayingTrackId = null;
   globalState.mvpRevealActive = false;
 
-  try {
-    if (existsSync(USER_REQUESTS_FILE)) {
-      writeFileSync(USER_REQUESTS_FILE, JSON.stringify([], null, 2), 'utf-8');
-    }
-    saveStateSync();
-  } catch {}
-
+  saveStateSync();
+  io.emit('track-playing-changed', { track: null });
   emitQueueUpdate();
   emitStateUpdate();
-  res.json({ success: true, count: queue.length, message: `Queue successfully reset to Master List (${queue.length} tracks).` });
+  res.json({
+    success: true,
+    count: queue.length,
+    message: `Queue reset (${queue.length} master & guest tracks set to pending).`,
+  });
 });
 
 // Clear played history to reset duplicate lockout - DJ ONLY
@@ -1494,21 +1535,6 @@ io.on('connection', (socket) => {
 });
 
 async function startServer() {
-  // First time clean initialization as requested by user ("First empty all the lists. If needed reinitialize the json files")
-  try {
-    if (!existsSync(DATA_DIR)) {
-      mkdirSync(DATA_DIR, { recursive: true });
-    }
-    writeFileSync(MASTERLIST_FILE, JSON.stringify([], null, 2), 'utf-8');
-    writeFileSync(USER_REQUESTS_FILE, JSON.stringify([], null, 2), 'utf-8');
-    writeFileSync(STATE_FILE, JSON.stringify({ queue: [], playedHistory: [], globalState }, null, 2), 'utf-8');
-    queue = [];
-    playedHistory = [];
-    console.log('[Persistence] All lists wiped clean and JSON files reinitialized to empty.');
-  } catch (err) {
-    console.warn('Could not reinitialize JSON files:', err);
-  }
-
   loadPersistedState();
 
   const isProd = process.env.NODE_ENV === 'production';
